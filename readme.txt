@@ -1,0 +1,1 @@
+this is a test for combining nextjs for frontend and laravel for backend
