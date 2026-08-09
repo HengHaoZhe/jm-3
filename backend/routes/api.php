@@ -10,5 +10,7 @@ use App\Http\Controllers\Api\PageController;
 // })->middleware('auth:sanctum');
 
 Route::apiResource('albums', AlbumController::class);
+Route::get('albums/{album_id}/pages', [PageController::class, 'albumPages'])->name('albums.pages');
+Route::get('albums/{album_id}/pages/{sort_order}/image', [PageController::class, 'image'])->name('pages.image');
 
-Route::apiResource('pages', PageController::class);
+// Route::apiResource('pages', PageController::class);

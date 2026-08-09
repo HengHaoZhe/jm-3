@@ -21,11 +21,11 @@ return new class extends Migration
     Schema::create('pages', function (Blueprint $table) {
       $table->id();
       $table->string('album_id')->index(); // Links straight to albums
-      $table->integer('page_number');
+      $table->unsignedInteger('sort_order');
       $table->string('file_path');
       $table->timestamps();
       $table->foreign('album_id')->references('album_id')->on('albums')->onDelete('cascade');
-      $table->unique(['album_id', 'page_number']);
+      $table->unique(['album_id', 'sort_order']);
     });
   }
 

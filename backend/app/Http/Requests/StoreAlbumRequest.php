@@ -12,7 +12,7 @@ class StoreAlbumRequest extends FormRequest
    */
   public function authorize(): bool
   {
-    return false;
+    return true;
   }
 
   /**
@@ -24,9 +24,6 @@ class StoreAlbumRequest extends FormRequest
   {
     return [
       'album_id' => 'required|string|unique:albums,album_id',
-      'title' => 'required|string|max:255',
-      'status' => 'nullable|string',
-      'page_count' => 'nullable|integer',
     ];
   }
 }

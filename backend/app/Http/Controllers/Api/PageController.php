@@ -3,52 +3,29 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Page;
 use App\Http\Resources\PageResource;
-use App\Http\Requests\StorePageRequest;
 
 class PageController extends Controller
 {
-  /**
-   * Display a listing of the resource.
-   */
-  public function index()
+  public function image(string $album_id, int $sort_order)
   {
-    return PageResource::collection(Page::paginate(50));
+    $page = Page::where('album_id', $album_id)->where('sort_order', $sort_order)->firstOrFail();
+
+    $albumDirectory = config('manga.storage_path') . DIRECTORY_SEPARATOR . $album_id;
+
+    $filePath = $albumDirectory . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $page->file_path);
+
+    if (!is_file($filePath)) {
+      abort(404, 'Page image not found.');
+    }
+
+    return response()->file($filePath);
   }
 
-  /**
-   * Store a newly created resource in storage.
-   */
-  public function store(StorePageRequest $request)
+  public function albumPages(string $album_id)
   {
-    $page = Page::create($request->validated());
-    return new PageResource($page);
-  }
-
-  /**
-   * Display the specified resource.
-   */
-  public function show(string $id)
-  {
-    $page = Page::findOrFail($id);
-    return new PageResource($page);
-  }
-
-  /**
-   * Update the specified resource in storage.
-   */
-  public function update(Request $request, string $id)
-  {
-    //
-  }
-
-  /**
-   * Remove the specified resource from storage.
-   */
-  public function destroy(string $id)
-  {
-    //
+    $pages = Page::where('album_id', $album_id)->orderBy('sort_order')->paginate(50);
+    return PageResource::collection($pages);
   }
 }

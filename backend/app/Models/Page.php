@@ -9,7 +9,7 @@ class Page extends Model
 {
   protected $fillable = [
     'album_id',
-    'page_number',
+    'sort_order',
     'file_path',
   ];
 

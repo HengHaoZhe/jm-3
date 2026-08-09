@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Album;
 use App\Http\Requests\StoreAlbumRequest;
 use App\Http\Resources\AlbumResource;
+use App\Jobs\DownloadAlbumJob;
 
 class AlbumController extends Controller
 {
@@ -25,7 +26,14 @@ class AlbumController extends Controller
    */
   public function store(StoreAlbumRequest $request)
   {
-    $album = Album::create($request->validated());
+    $album = Album::create([
+      'album_id' => $request->album_id,
+      'title' => '',
+      'status' => 'queued',
+    ]);
+
+    DownloadAlbumJob::dispatch($album);
+
     return new AlbumResource($album);
   }
 

@@ -1,66 +1,160 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import styles from "./page.module.css";
 
+type AlbumStatus = "queued" | "downloading" | "completed" | "failed";
+
+interface Album {
+  album_id: string;
+  title: string;
+  status: AlbumStatus;
+  page_count: number;
+  created_at: string;
+}
+
+interface AlbumsResponse {
+  data: Album[];
+  links?: {
+    first: string | null;
+    last: string | null;
+    prev: string | null;
+    next: string | null;
+  };
+  meta?: {
+    current_page: number;
+    from: number | null;
+    last_page: number;
+    per_page: number;
+    to: number | null;
+    total: number;
+  };
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
 export default function Home() {
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchAlbums() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(`${API_URL}/api/albums`);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch albums (${response.status})`);
+        }
+
+        const result: AlbumsResponse = await response.json();
+
+        setAlbums(result.data);
+      } catch (err) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("Failed to load albums.");
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchAlbums();
+  }, []);
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className={styles.page}>
+      <div className={styles.container}>
+        <header className={styles.header}>
+          <div>
+            <p className={styles.eyebrow}>JM NEXT</p>
+            <h1>Manga Library</h1>
+            <p className={styles.subtitle}>Your downloaded manga collection.</p>
+          </div>
+
+          <div className={styles.albumCount}>
+            {albums.length} album{albums.length === 1 ? "" : "s"}
+          </div>
+        </header>
+
+        {loading && <div className={styles.message}>Loading albums...</div>}
+
+        {error && (
+          <div className={`${styles.message} ${styles.error}`}>
+            <h2>Unable to load albums</h2>
+            <p>{error}</p>
+            <p>Make sure the Laravel API is running at:</p>
+            <code>{API_URL}</code>
+          </div>
+        )}
+
+        {!loading && !error && albums.length === 0 && (
+          <div className={styles.message}>
+            <h2>No albums yet</h2>
+            <p>
+              Download an album through the Laravel API and it will appear here.
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && albums.length > 0 && (
+          <section className={styles.grid}>
+            {albums.map((album) => (
+              <Link
+                key={album.album_id}
+                href={`/albums/${album.album_id}`}
+                className={styles.card}
+              >
+                <div className={styles.cardHeader}>
+                  <span className={styles.albumId}>#{album.album_id}</span>
+
+                  <StatusBadge status={album.status} />
+                </div>
+
+                <div className={styles.cardBody}>
+                  <h2>{album.title || "Untitled Album"}</h2>
+
+                  <div className={styles.metadata}>
+                    <span>
+                      {album.page_count}{" "}
+                      {album.page_count === 1 ? "page" : "pages"}
+                    </span>
+
+                    <span>Album ID: {album.album_id}</span>
+                  </div>
+                </div>
+
+                <div className={styles.cardFooter}>
+                  <span>Open album</span>
+                  <span className={styles.arrow}>→</span>
+                </div>
+              </Link>
+            ))}
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function StatusBadge({ status }: { status: AlbumStatus }) {
+  const labels: Record<AlbumStatus, string> = {
+    queued: "Queued",
+    downloading: "Downloading",
+    completed: "Completed",
+    failed: "Failed",
+  };
+
+  return (
+    <span className={`${styles.status} ${styles[`status-${status}`]}`}>
+      <span className={styles.statusDot} />
+      {labels[status]}
+    </span>
   );
 }
