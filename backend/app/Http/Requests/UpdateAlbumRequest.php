@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateAlbumRequest extends FormRequest
 {
@@ -23,7 +24,17 @@ class UpdateAlbumRequest extends FormRequest
   public function rules(): array
   {
     return [
-      //
+      'title' => ['string', 'max:255'],
+      'page_count' => ['integer', 'min:0', 'max:65535'],
+      'status' => [
+        'required',
+        Rule::in([
+          'queued',
+          'downloading',
+          'completed',
+          'failed',
+        ]),
+      ],
     ];
   }
 }

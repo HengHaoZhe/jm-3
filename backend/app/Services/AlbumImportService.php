@@ -52,6 +52,25 @@ class AlbumImportService
     });
   }
 
+  public function countPages(Album $album): int
+  {
+    $albumDirectory = config('manga.storage_path') . DIRECTORY_SEPARATOR . $album->album_id;
+
+    if (!File::isDirectory($albumDirectory)) {
+      throw new RuntimeException("Album directory does not exist: {$albumDirectory}");
+    }
+
+    $files = $this->findImageFiles($albumDirectory);
+
+    $pageCount = count($files);
+
+    $album->update([
+      'page_count' => $pageCount,
+    ]);
+
+    return $pageCount;
+  }
+
   /**
    * Find all supported image files recursively.
    *

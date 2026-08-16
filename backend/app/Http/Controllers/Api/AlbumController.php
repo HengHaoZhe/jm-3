@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\Album;
 use App\Http\Requests\StoreAlbumRequest;
+use App\Http\Requests\UpdateAlbumRequest;
 use App\Http\Resources\AlbumResource;
 use App\Jobs\DownloadAlbumJob;
+use App\Models\Album;
+use App\Services\AlbumImportService;
+use Illuminate\Http\Request;
+use RuntimeException;
 
 class AlbumController extends Controller
 {
@@ -17,7 +20,7 @@ class AlbumController extends Controller
   public function index()
   {
     return AlbumResource::collection(
-      Album::with('pages')->paginate(20)
+      Album::orderBy('id', 'desc')->get()
     );
   }
 
@@ -51,7 +54,7 @@ class AlbumController extends Controller
   /**
    * Update the specified resource in storage.
    */
-  public function update(StoreAlbumRequest $request, string $album_id)
+  public function update(UpdateAlbumRequest $request, string $album_id)
   {
     $album = Album::where('album_id', $album_id)->firstOrFail();
     $album->update($request->validated());
@@ -66,5 +69,20 @@ class AlbumController extends Controller
     $album = Album::where('album_id', $album_id)->firstOrFail();
     $album->delete();
     return response()->json(['message' => 'Deleted']);
+  }
+
+  public function countPages(string $album_id, AlbumImportService $importService)
+  {
+    $album = Album::where('album_id', $album_id)->firstOrFail();
+
+    try {
+      $importService->countPages($album);
+    } catch (RuntimeException $e) {
+      return response()->json([
+        'message' => $e->getMessage(),
+      ], 422);
+    }
+
+    return new AlbumResource($album->fresh());
   }
 }
