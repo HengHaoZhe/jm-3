@@ -54,9 +54,6 @@ export default function ReaderPage() {
   const [error, setError] = useState<string | null>(null);
   const [progressRestored, setProgressRestored] = useState(false);
 
-  /*
-   * Resolve API URL on the client.
-   */
   useEffect(() => {
     let cancelled = false;
 
@@ -82,9 +79,6 @@ export default function ReaderPage() {
     };
   }, []);
 
-  /*
-   * Fetch album.
-   */
   useEffect(() => {
     if (!albumId) {
       return;
@@ -97,7 +91,7 @@ export default function ReaderPage() {
         setLoading(true);
         setError(null);
 
-        const response = await apiFetch(`/albums/${albumId}`);
+        const response = await apiFetch(`/albums/${albumId}/reader`);
 
         if (cancelled) {
           return;
@@ -140,15 +134,6 @@ export default function ReaderPage() {
     };
   }, [albumId]);
 
-  /*
-   * Restore reading position.
-   *
-   * Priority:
-   *
-   * 1. Valid ?page= query parameter
-   * 2. Saved localStorage position
-   * 3. Page 1
-   */
   useEffect(() => {
     if (!album) {
       return;
@@ -200,9 +185,6 @@ export default function ReaderPage() {
     setProgressRestored(true);
   }, [album, pageParam]);
 
-  /*
-   * Save current reading position.
-   */
   useEffect(() => {
     if (!album || !progressRestored) {
       return;
@@ -211,16 +193,10 @@ export default function ReaderPage() {
     localStorage.setItem(getProgressKey(album.album_id), String(currentPage));
   }, [album, currentPage, progressRestored]);
 
-  /*
-   * Keep page input synchronized.
-   */
   useEffect(() => {
     setPageInput(String(currentPage));
   }, [currentPage]);
 
-  /*
-   * Keyboard navigation.
-   */
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (!album || !progressRestored) {
@@ -252,11 +228,8 @@ export default function ReaderPage() {
     };
   }, [album, currentPage, progressRestored]);
 
-  /*
-   * Navigate to a page.
-   */
   function goToPage(pageNumber: number) {
-    if (!album) {
+    if (!album || album.pages.length === 0) {
       return;
     }
 
@@ -265,9 +238,6 @@ export default function ReaderPage() {
     setCurrentPage(page);
   }
 
-  /*
-   * Page input.
-   */
   function submitPageInput() {
     const pageNumber = Number(pageInput);
 
@@ -396,6 +366,14 @@ export default function ReaderPage() {
       </div>
 
       <div className={styles.singlePage}>
+        <button
+          type="button"
+          className={`${styles.pageNavigation} ${styles.pageNavigationLeft}`}
+          onClick={() => goToPage(currentPage - 1)}
+          disabled={currentPage === 1}
+          aria-label="Previous page"
+        />
+
         {page && apiUrl && (
           <figure className={styles.page}>
             <img
@@ -406,6 +384,14 @@ export default function ReaderPage() {
             <div className={styles.pageNumber}>Page {page.sort_order}</div>
           </figure>
         )}
+
+        <button
+          type="button"
+          className={`${styles.pageNavigation} ${styles.pageNavigationRight}`}
+          onClick={() => goToPage(currentPage + 1)}
+          disabled={currentPage === album.pages.length}
+          aria-label="Next page"
+        />
       </div>
 
       <footer className={styles.footer}>

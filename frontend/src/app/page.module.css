@@ -159,6 +159,30 @@
   white-space: nowrap;
 }
 
+.redownloadFailedButton {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #dc2626;
+  border-radius: 8px;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.redownloadFailedButton:hover:not(:disabled) {
+  border-color: #b91c1c;
+  background: #fee2e2;
+}
+
+.redownloadFailedButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .clearProgressButton:hover {
   border-color: #bbb;
   background: #f7f7f7;
@@ -393,7 +417,9 @@
 }
 
 .viewButton,
-.readButton {
+.editButton,
+.readButton,
+.deleteButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -417,6 +443,16 @@
   background: #f5f5f5;
 }
 
+.editButton {
+  border: 1px solid #171717;
+  background: #171717;
+  color: #fff;
+}
+
+.editButton:hover {
+  background: #333;
+}
+
 .readButton {
   border: 1px solid #171717;
   background: #171717;
@@ -425,6 +461,32 @@
 
 .readButton:hover {
   background: #333;
+}
+
+.deleteButton {
+  border: 1px solid #ef4444;
+  background: #fff;
+  color: #b91c1c;
+  cursor: pointer;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.deleteButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.inlineError {
+  margin: 0 24px 16px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 13px;
 }
 
 /* Status */
@@ -518,40 +580,8 @@
   border-color: #fecaca;
 }
 
-/* Responsive */
+/* Header */
 
-@media (max-width: 900px) {
-  .libraryHeader {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .libraryTools {
-    width: 100%;
-  }
-
-  .searchWrapper {
-    flex: 1;
-    width: auto;
-  }
-}
-
-@media (max-width: 600px) {
-  .headerActions {
-    align-items: stretch;
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .downloadButton,
-  .clearProgressButton {
-    width: 100%;
-  }
-
-  .albumCount {
-    align-self: flex-start;
-  }
-}
 .headerActions {
   display: flex;
   align-items: center;
@@ -594,4 +624,199 @@
   margin: 0 0 20px;
   color: #777;
   font-size: 14px;
+}
+
+/* Status filters */
+
+.statusFilters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.statusFilterButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.statusFilterButton:hover {
+  border-color: #aaa;
+}
+
+.statusFilterButton span {
+  font-weight: 600;
+}
+
+.statusFilterActive {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+
+.searchInput::-webkit-search-cancel-button,
+.searchInput::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.searchInput::-ms-clear {
+  display: none;
+}
+
+/* =========================================================
+   Album Hover Preview
+   ========================================================= */
+
+.previewCard {
+  position: fixed;
+  z-index: 9999;
+  width: 240px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.18),
+    0 3px 10px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
+.previewImageWrapper {
+  position: relative;
+  width: 240px;
+  height: 310px;
+  overflow: hidden;
+  background: #f3f3f3;
+}
+
+.previewImage {
+  display: block;
+  width: 240px;
+  height: 310px;
+  object-fit: contain;
+  background: #f3f3f3;
+  transition: opacity 0.15s ease;
+}
+
+.previewImageLoading {
+  opacity: 0;
+}
+
+.previewLoading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  background: #f3f3f3;
+}
+
+.previewSpinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #d9d9d9;
+  border-top-color: #171717;
+  border-radius: 50%;
+  animation: previewSpin 0.7s linear infinite;
+}
+
+.previewLoadingText {
+  color: #777;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.previewError {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+}
+
+@keyframes previewSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.previewInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-top: 1px solid #eee;
+}
+
+.previewTitle {
+  overflow: hidden;
+  color: #171717;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewPages {
+  color: #777;
+  font-size: 11px;
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .libraryHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .libraryTools {
+    width: 100%;
+  }
+
+  .searchWrapper {
+    flex: 1;
+    width: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .headerActions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .downloadButton,
+  .clearProgressButton,
+  .redownloadFailedButton {
+    width: 100%;
+  }
+
+  .albumCount {
+    align-self: flex-start;
+  }
+
+  .previewCard {
+    display: none;
+  }
 }

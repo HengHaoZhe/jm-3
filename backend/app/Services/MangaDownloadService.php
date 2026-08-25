@@ -38,6 +38,9 @@ class MangaDownloadService
 
     $script = $this->downloaderDirectory . DIRECTORY_SEPARATOR . 'jm-downloader.py';
 
+    $destination = $this->mangaDirectory . DIRECTORY_SEPARATOR . $albumId;
+    File::ensureDirectoryExists($destination);
+
     // Each album gets its own temporary working directory.
     $workingDirectory = $this->downloadDirectory . DIRECTORY_SEPARATOR . $albumId;
 

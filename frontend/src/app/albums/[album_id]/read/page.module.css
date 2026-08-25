@@ -144,48 +144,79 @@
 }
 
 .singlePage {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   overflow: hidden;
-
   padding: 12px;
+}
+
+/*
+ * Left and right click zones.
+ */
+.pageNavigation {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  z-index: 10;
+
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.pageNavigationLeft {
+  left: 0;
+}
+
+.pageNavigationRight {
+  right: 0;
+}
+
+.pageNavigation:hover:not(:disabled),
+.pageNavigation:active:not(:disabled) {
+  background: transparent;
+}
+
+.pageNavigation:focus,
+.pageNavigation:focus-visible {
+  outline: none;
+}
+
+.pageNavigation:disabled {
+  cursor: default;
 }
 
 .singlePage .page {
   position: relative;
-
   width: 100%;
   height: 100%;
-
   min-width: 0;
   min-height: 0;
-
   margin: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   line-height: 0;
 }
 
 .singlePage .page img {
   display: block;
-
   width: auto;
   height: auto;
-
   max-width: 100%;
   max-height: 100%;
-
   object-fit: contain;
-
   margin: 0 auto;
 }
 
@@ -194,13 +225,10 @@
   top: 8px;
   left: 8px;
   z-index: 2;
-
   padding: 5px 8px;
   border-radius: 4px;
-
   background: rgba(0, 0, 0, 0.65);
   color: #ddd;
-
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   line-height: normal;
@@ -234,13 +262,10 @@
   top: 10px;
   left: 10px;
   z-index: 2;
-
   padding: 5px 8px;
   border-radius: 4px;
-
   background: rgba(0, 0, 0, 0.65);
   color: #ddd;
-
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   line-height: normal;
@@ -251,12 +276,9 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-
   gap: 20px;
-
   min-height: 70px;
   padding: 12px 20px;
-
   color: #777;
   font-size: 13px;
 }
@@ -264,13 +286,10 @@
 .footerButton {
   min-width: 110px;
   padding: 9px 14px;
-
   border: 1px solid #333;
   border-radius: 8px;
-
   background: transparent;
   color: #ddd;
-
   cursor: pointer;
 }
 
@@ -286,14 +305,11 @@
 .message {
   display: flex;
   min-height: 100dvh;
-
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
   gap: 14px;
   padding: 24px;
-
   text-align: center;
 }
 
@@ -309,14 +325,10 @@
 
 .backButton {
   margin-top: 10px;
-
   padding: 10px 16px;
-
   border-radius: 8px;
-
   background: #fff;
   color: #111;
-
   font-size: 14px;
   font-weight: 600;
 }

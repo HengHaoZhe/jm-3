@@ -11,7 +11,7 @@ return new class extends Migration
     Schema::create('albums', function (Blueprint $table) {
       $table->id();
       $table->string('album_id')->unique();
-      $table->string('title')->default('');
+      $table->string('title')->nullable();
       // queued, downloading, completed, failed
       $table->string('status')->default('queued');
       $table->unsignedSmallInteger('page_count')->default(0);

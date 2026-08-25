@@ -24,8 +24,8 @@ class UpdateAlbumRequest extends FormRequest
   public function rules(): array
   {
     return [
-      'title' => ['string', 'max:255'],
-      'page_count' => ['integer', 'min:0', 'max:65535'],
+      'title' => ['nullable', 'string', 'max:255'],
+      'page_count' => ['nullable', 'integer', 'min:0', 'max:65535'],
       'status' => [
         'required',
         Rule::in([

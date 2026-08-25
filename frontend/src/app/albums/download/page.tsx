@@ -66,75 +66,54 @@ export default function DownloadAlbumsPage() {
     setQueueing(true);
 
     try {
-      const queueResults = await Promise.all(
-        parsed.validIds.map(async (albumId) => {
-          try {
-            const response = await apiFetch("/albums", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                album_id: albumId,
-              }),
-            });
-
-            if (!response.ok) {
-              let message = `Failed (${response.status})`;
-
-              try {
-                const result = await response.json();
-
-                if (result.message) {
-                  message = result.message;
-                }
-
-                if (result.errors?.album_id?.[0]) {
-                  message = result.errors.album_id[0];
-                }
-              } catch {
-                // Keep default error.
-              }
-
-              return {
-                albumId,
-                success: false,
-                message,
-              };
-            }
-
-            const result: CreateAlbumResponse = await response.json();
-
-            return {
-              albumId,
-              success: true,
-              message: `Queued ${result.data.title || `Album #${albumId}`}.`,
-            };
-          } catch (error) {
-            return {
-              albumId,
-              success: false,
-              message:
-                error instanceof Error ? error.message : "Request failed.",
-            };
-          }
+      const response = await apiFetch("/albums/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          album_ids: parsed.validIds,
         }),
+      });
+
+      if (!response.ok) {
+        let message = `Failed to queue albums (${response.status})`;
+
+        try {
+          const result = await response.json();
+
+          if (result.message) {
+            message = result.message;
+          }
+
+          if (result.errors?.album_ids?.[0]) {
+            message = result.errors.album_ids[0];
+          }
+        } catch {
+          // Keep default error.
+        }
+
+        throw new Error(message);
+      }
+
+      const result = await response.json();
+
+      const queuedCount = result.data?.queued?.length ?? 0;
+      const existingCount = result.data?.existing?.length ?? 0;
+
+      console.log(
+        `Queued ${queuedCount} album(s). ${existingCount} already existed.`,
       );
 
-      const anySucceeded = queueResults.some((result) => result.success);
-
-      if (!anySucceeded) {
-        setQueueError(
-          queueResults[0]?.message || "Unable to queue the selected album IDs.",
-        );
-        return;
-      }
-
-      if (parsed.invalidValues.length === 0) {
-        setInput("");
-      }
+      setInput("");
 
       router.push("/");
+    } catch (error) {
+      setQueueError(
+        error instanceof Error
+          ? error.message
+          : "Unable to queue the selected albums.",
+      );
     } finally {
       setQueueing(false);
     }

@@ -9,6 +9,7 @@ import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
 type AlbumStatus = "queued" | "downloading" | "completed" | "failed";
 
 interface Page {
+  id: number;
   sort_order: number;
   file_path: string;
   url: string;
@@ -25,14 +26,23 @@ interface Album {
 
 interface AlbumResponse {
   data: Album;
+  meta?: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    has_more: boolean;
+  };
 }
 
-const API_URL = await getApiBaseUrl();
+function getImageUrl(apiUrl: string | null, url: string) {
+  if (!apiUrl) {
+    return url;
+  }
 
-function getImageUrl(url: string) {
   const parsedUrl = new URL(url);
 
-  return `${API_URL}${parsedUrl.pathname}${parsedUrl.search}`;
+  return `${apiUrl}${parsedUrl.pathname}${parsedUrl.search}`;
 }
 
 export default function AlbumPage() {
@@ -40,24 +50,36 @@ export default function AlbumPage() {
   const albumId = params.album_id;
 
   const [album, setAlbum] = useState<Album | null>(null);
+  const [apiUrl, setApiUrl] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [redownloading, setRedownloading] = useState(false);
+  const [redownloadError, setRedownloadError] = useState<string | null>(null);
 
-  const [editTitle, setEditTitle] = useState("");
-  const [editStatus, setEditStatus] = useState<AlbumStatus>("completed");
-  const [editPageCount, setEditPageCount] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
+  useEffect(() => {
+    getApiBaseUrl()
+      .then(setApiUrl)
+      .catch(() => undefined);
+  }, []);
+
+  /*
+   * Fetch first page of album pages.
+   */
   useEffect(() => {
     async function fetchAlbum() {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await apiFetch(`/albums/${albumId}`);
+        const response = await apiFetch(
+          `/albums/${albumId}?per_page=20&page=1`,
+        );
 
         if (response.status === 404) {
           throw new Error("Album not found.");
@@ -70,6 +92,8 @@ export default function AlbumPage() {
         const result: AlbumResponse = await response.json();
 
         setAlbum(result.data);
+        setCurrentPage(result.meta?.current_page ?? 1);
+        setHasMorePages(result.meta?.has_more ?? false);
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message);
@@ -86,6 +110,12 @@ export default function AlbumPage() {
     }
   }, [albumId]);
 
+  /*
+   * Poll downloading albums.
+   *
+   * Only the first page is needed while an album is being
+   * downloaded. Once completed, the user can load more pages.
+   */
   useEffect(() => {
     if (!album) {
       return;
@@ -100,7 +130,9 @@ export default function AlbumPage() {
 
     const interval = window.setInterval(async () => {
       try {
-        const response = await apiFetch(`/albums/${albumId}`);
+        const response = await apiFetch(
+          `/albums/${albumId}?per_page=20&page=1`,
+        );
 
         if (!response.ok) {
           return;
@@ -109,6 +141,8 @@ export default function AlbumPage() {
         const result: AlbumResponse = await response.json();
 
         setAlbum(result.data);
+        setCurrentPage(result.meta?.current_page ?? 1);
+        setHasMorePages(result.meta?.has_more ?? false);
       } catch {
         // Ignore background polling errors.
       }
@@ -119,53 +153,72 @@ export default function AlbumPage() {
     };
   }, [album, albumId]);
 
-  function startEditing() {
-    if (!album) {
-      return;
-    }
-
-    setEditTitle(album.title);
-    setEditStatus(album.status);
-    setEditPageCount(String(album.page_count));
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  function cancelEditing() {
-    setSaveError(null);
-    setEditing(false);
-  }
-
-  async function saveChanges() {
-    if (!album) {
-      return;
-    }
-
-    const pageCount = Number(editPageCount);
-
-    if (!Number.isInteger(pageCount) || pageCount < 0) {
-      setSaveError("Page count must be a non-negative whole number.");
+  /*
+   * Load the next batch of pages.
+   */
+  async function loadMorePages() {
+    if (!album || loadingMore || !hasMorePages) {
       return;
     }
 
     try {
-      setSaving(true);
-      setSaveError(null);
+      setLoadingMore(true);
+      setError(null);
 
-      const response = await apiFetch(`/albums/${albumId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: editTitle,
-          status: editStatus,
-          page_count: pageCount,
-        }),
+      const nextPage = currentPage + 1;
+
+      const response = await apiFetch(
+        `/albums/${albumId}?per_page=20&page=${nextPage}`,
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to load more pages (${response.status}).`);
+      }
+
+      const result: AlbumResponse = await response.json();
+
+      setAlbum((currentAlbum) => {
+        if (!currentAlbum) {
+          return result.data;
+        }
+
+        return {
+          ...currentAlbum,
+          pages: [...currentAlbum.pages, ...result.data.pages],
+        };
+      });
+
+      setCurrentPage(result.meta?.current_page ?? nextPage);
+      setHasMorePages(result.meta?.has_more ?? false);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to load more pages.");
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  /*
+   * Redownload.
+   */
+  async function redownloadAlbum() {
+    if (!album) {
+      return;
+    }
+
+    try {
+      setRedownloading(true);
+      setRedownloadError(null);
+
+      const response = await apiFetch(`/albums/${albumId}/redownload`, {
+        method: "POST",
       });
 
       if (!response.ok) {
-        let message = `Failed to update album (${response.status}).`;
+        let message = `Failed to redownload album (${response.status}).`;
 
         try {
           const result = await response.json();
@@ -173,18 +226,8 @@ export default function AlbumPage() {
           if (result.message) {
             message = result.message;
           }
-
-          if (result.errors) {
-            const firstError = Object.values(result.errors)
-              .flat()
-              .find((value) => typeof value === "string");
-
-            if (firstError) {
-              message = firstError;
-            }
-          }
         } catch {
-          // Use the default error message.
+          // Use default message.
         }
 
         throw new Error(message);
@@ -193,17 +236,29 @@ export default function AlbumPage() {
       const result: AlbumResponse = await response.json();
 
       setAlbum(result.data);
-      setEditing(false);
+      setCurrentPage(result.meta?.current_page ?? 1);
+      setHasMorePages(result.meta?.has_more ?? false);
     } catch (err) {
       if (err instanceof Error) {
-        setSaveError(err.message);
+        setRedownloadError(err.message);
       } else {
-        setSaveError("Failed to update album.");
+        setRedownloadError("Failed to redownload album.");
       }
     } finally {
-      setSaving(false);
+      setRedownloading(false);
     }
   }
+
+  const headerBusy = redownloading;
+
+  /*
+   * Always sort pages by sort_order before rendering.
+   *
+   * Create a copy so the original album.pages array is not mutated.
+   */
+  const sortedPages = album
+    ? [...album.pages].sort((a, b) => a.sort_order - b.sort_order)
+    : [];
 
   if (loading) {
     return (
@@ -225,6 +280,7 @@ export default function AlbumPage() {
 
           <div className={styles.message}>
             <h1>Unable to load album</h1>
+
             <p>{error ?? "Album not found."}</p>
           </div>
         </div>
@@ -249,17 +305,23 @@ export default function AlbumPage() {
           </div>
 
           <div className={styles.headerActions}>
-            {!editing && (
-              <button
-                type="button"
-                className={styles.editButton}
-                onClick={startEditing}
-              >
-                Edit
-              </button>
-            )}
+            <Link
+              href={`/albums/${album.album_id}/edit`}
+              className={styles.editButton}
+            >
+              Edit
+            </Link>
 
-            {album.status === "completed" && !editing && (
+            <button
+              type="button"
+              className={styles.redownloadButton}
+              onClick={redownloadAlbum}
+              disabled={headerBusy}
+            >
+              {redownloading ? "Re-downloading..." : "Redownload"}
+            </button>
+
+            {album.status === "completed" && (
               <Link
                 href={`/albums/${album.album_id}/read`}
                 className={styles.readButton}
@@ -272,83 +334,8 @@ export default function AlbumPage() {
           </div>
         </header>
 
-        {editing && (
-          <section className={styles.editSection}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.eyebrow}>EDIT</p>
-
-                <h2>Album Details</h2>
-              </div>
-            </div>
-
-            <div className={styles.editForm}>
-              <label className={styles.formField}>
-                <span>Title</span>
-
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(event) => setEditTitle(event.target.value)}
-                  maxLength={255}
-                  disabled={saving}
-                />
-              </label>
-
-              <label className={styles.formField}>
-                <span>Status</span>
-
-                <select
-                  value={editStatus}
-                  onChange={(event) =>
-                    setEditStatus(event.target.value as AlbumStatus)
-                  }
-                  disabled={saving}
-                >
-                  <option value="queued">Queued</option>
-                  <option value="downloading">Downloading</option>
-                  <option value="completed">Completed</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </label>
-
-              <label className={styles.formField}>
-                <span>Page Count</span>
-
-                <input
-                  type="number"
-                  min="0"
-                  max="65535"
-                  step="1"
-                  value={editPageCount}
-                  onChange={(event) => setEditPageCount(event.target.value)}
-                  disabled={saving}
-                />
-              </label>
-
-              {saveError && <div className={styles.saveError}>{saveError}</div>}
-
-              <div className={styles.editActions}>
-                <button
-                  type="button"
-                  className={styles.cancelButton}
-                  onClick={cancelEditing}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.saveButton}
-                  onClick={saveChanges}
-                  disabled={saving}
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </section>
+        {redownloadError && (
+          <div className={styles.actionError}>{redownloadError}</div>
         )}
 
         <section className={styles.infoGrid}>
@@ -394,7 +381,10 @@ export default function AlbumPage() {
           <div className={styles.message}>
             <h2>Download failed</h2>
 
-            <p>The download could not be completed.</p>
+            <p>
+              The download could not be completed. You can place your own files
+              in the album folder and use Import Files from Edit.
+            </p>
           </div>
         )}
 
@@ -408,14 +398,14 @@ export default function AlbumPage() {
               </div>
 
               <span className={styles.pageCount}>
-                {album.pages.length}{" "}
-                {album.pages.length === 1 ? "page" : "pages"}
+                {sortedPages.length}{" "}
+                {sortedPages.length === 1 ? "page" : "pages"}
               </span>
             </div>
 
             <div className={styles.pagePreviewList}>
-              {album.pages.map((page) => (
-                <figure key={page.sort_order} className={styles.pagePreview}>
+              {sortedPages.map((page) => (
+                <figure key={page.id} className={styles.pagePreview}>
                   <Link
                     href={`/albums/${album.album_id}/read?page=${page.sort_order}`}
                     className={styles.pagePreviewLink}
@@ -425,13 +415,30 @@ export default function AlbumPage() {
                     </div>
 
                     <img
-                      src={getImageUrl(page.url)}
+                      src={getImageUrl(apiUrl, page.url)}
                       alt={`Page ${page.sort_order}`}
                       loading={page.sort_order <= 2 ? "eager" : "lazy"}
                     />
                   </Link>
                 </figure>
               ))}
+            </div>
+
+            <div className={styles.loadMoreContainer}>
+              {hasMorePages && (
+                <button
+                  type="button"
+                  className={styles.loadMoreButton}
+                  onClick={loadMorePages}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? "Loading..." : "Load More Pages"}
+                </button>
+              )}
+
+              <span className={styles.loadMoreInfo}>
+                Showing {sortedPages.length} of {album.page_count} pages
+              </span>
             </div>
           </section>
         )}
