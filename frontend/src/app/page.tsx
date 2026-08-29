@@ -88,24 +88,71 @@ export default function Home() {
     )}/pages/1/image`;
   }
 
-  function updatePreviewPosition(event: React.MouseEvent<HTMLTableRowElement>) {
-    const previewWidth = 240;
-    const previewHeight = 330;
-    const offset = 16;
+  /**
+   * Position the preview around the mouse/touch location.
+   *
+   * Desktop:
+   * - Uses the existing 240x330 preview dimensions.
+   * - Preview follows the mouse.
+   *
+   * Mobile:
+   * - Uses the smaller mobile preview dimensions.
+   * - Preview follows the most recent screen tap.
+   * - If there is not enough room below the tap, it moves above it.
+   */
+  function updatePreviewPosition(clientX: number, clientY: number) {
+    const isMobile = window.innerWidth <= 600;
 
-    let x = event.clientX + offset;
-    let y = event.clientY + offset;
+    const previewWidth = isMobile ? 210 : 240;
+    const previewHeight = isMobile ? 315 : 330;
+    const offset = isMobile ? 12 : 16;
+    const viewportPadding = 12;
 
-    if (x + previewWidth > window.innerWidth - 12) {
-      x = event.clientX - previewWidth - offset;
+    let x = clientX + offset;
+    let y = clientY + offset;
+
+    /*
+     * If the preview would extend beyond the right side,
+     * place it to the left of the pointer/tap.
+     */
+    if (x + previewWidth > window.innerWidth - viewportPadding) {
+      x = clientX - previewWidth - offset;
     }
 
-    if (y + previewHeight > window.innerHeight - 12) {
-      y = window.innerHeight - previewHeight - 12;
+    /*
+     * If the preview would extend beyond the bottom,
+     * place it above the pointer/tap.
+     */
+    if (y + previewHeight > window.innerHeight - viewportPadding) {
+      y = clientY - previewHeight - offset;
     }
 
-    if (y < 12) {
-      y = 12;
+    /*
+     * Keep the preview inside the left edge.
+     */
+    if (x < viewportPadding) {
+      x = viewportPadding;
+    }
+
+    /*
+     * Keep the preview inside the right edge.
+     */
+    if (x + previewWidth > window.innerWidth - viewportPadding) {
+      x = window.innerWidth - previewWidth - viewportPadding;
+    }
+
+    /*
+     * Keep the preview inside the top edge.
+     */
+    if (y < viewportPadding) {
+      y = viewportPadding;
+    }
+
+    /*
+     * Keep the preview inside the bottom edge.
+     */
+    if (y + previewHeight > window.innerHeight - viewportPadding) {
+      y = window.innerHeight - previewHeight - viewportPadding;
     }
 
     setPreviewPosition({
@@ -130,7 +177,7 @@ export default function Home() {
     setPreviewLoading(true);
     setPreviewError(false);
 
-    updatePreviewPosition(event);
+    updatePreviewPosition(event.clientX, event.clientY);
   }
 
   function handleRowMouseMove(event: React.MouseEvent<HTMLTableRowElement>) {
@@ -138,10 +185,51 @@ export default function Home() {
       return;
     }
 
-    updatePreviewPosition(event);
+    updatePreviewPosition(event.clientX, event.clientY);
+  }
+
+  /**
+   * Mobile touch handling.
+   *
+   * The preview follows the LAST place the user tapped.
+   * This intentionally does not use a fixed bottom position.
+   */
+  function handleRowTouchStart(
+    album: Album,
+    event: React.TouchEvent<HTMLTableRowElement>,
+  ) {
+    if (album.page_count <= 0) {
+      setHoveredAlbum(null);
+      setPreviewLoading(false);
+      setPreviewError(false);
+
+      return;
+    }
+
+    const touch = event.touches[0];
+
+    if (!touch) {
+      return;
+    }
+
+    setHoveredAlbum(album);
+    setPreviewLoading(true);
+    setPreviewError(false);
+
+    updatePreviewPosition(touch.clientX, touch.clientY);
   }
 
   function handleRowMouseLeave() {
+    /*
+     * Do not clear the preview on mobile.
+     *
+     * Mouse leave is only relevant to desktop hover behavior.
+     * Mobile touch does not rely on mouseleave.
+     */
+    if (window.innerWidth <= 600) {
+      return;
+    }
+
     setHoveredAlbum(null);
     setPreviewLoading(false);
     setPreviewError(false);
@@ -656,6 +744,9 @@ export default function Home() {
                         }
                         onMouseMove={handleRowMouseMove}
                         onMouseLeave={handleRowMouseLeave}
+                        onTouchStart={(event) =>
+                          handleRowTouchStart(album, event)
+                        }
                       >
                         <td className={styles.idCell}>{album.id}</td>
 

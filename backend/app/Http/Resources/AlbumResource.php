@@ -15,23 +15,12 @@ class AlbumResource extends JsonResource
   public function toArray(Request $request): array
   {
     $pages = $this->relationLoaded('pages') ? $this->pages : collect();
-    $previewPage = $this->relationLoaded('previewPage') ? $this->previewPage->first() : null;
-    $previewUrl = null;
-    if ($previewPage) {
-      $previewUrl = url(
-        "/api/albums/{$this->album_id}/pages/{$previewPage->sort_order}/image"
-      );
-      if ($previewPage->updated_at) {
-        $previewUrl .= '?v=' . $previewPage->updated_at->timestamp;
-      }
-    }
     return [
       'id' => $this->id,
       'album_id' => $this->album_id,
       'title' => $this->title,
       'status' => $this->status,
       'page_count' => $this->page_count,
-      'preview_url' => $previewUrl,
       'pages' => PageResource::collection($this->whenLoaded('pages')),
       'groups' => $pages
         ->groupBy(function ($page) {

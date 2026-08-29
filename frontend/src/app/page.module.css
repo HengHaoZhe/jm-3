@@ -675,7 +675,7 @@
 }
 
 /* =========================================================
-   Album Hover Preview
+   Album Preview
    ========================================================= */
 
 .previewCard {
@@ -816,7 +816,49 @@
     align-self: flex-start;
   }
 
+  /*
+   * Mobile preview:
+   *
+   * Unlike the old version, the preview is NOT hidden.
+   * Its left/top position is controlled by page.tsx using
+   * the latest touch location.
+   */
   .previewCard {
-    display: none;
+    width: 210px;
+    max-width: calc(100vw - 24px);
+    border-radius: 10px;
+  }
+
+  .previewImageWrapper {
+    width: 210px;
+    height: 270px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .previewImage {
+    width: 210px;
+    height: 270px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .previewInfo {
+    padding: 10px 12px;
+  }
+
+  .previewTitle {
+    font-size: 12px;
+  }
+
+  .previewPages {
+    font-size: 10px;
+  }
+
+  .previewSpinner {
+    width: 26px;
+    height: 26px;
+  }
+
+  .previewLoadingText {
+    font-size: 10px;
   }
 }

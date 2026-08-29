@@ -24,17 +24,6 @@ class AlbumController extends Controller
   public function index()
   {
     $albums = Album::orderBy('id', 'desc')->get();
-    if ($albums->isNotEmpty()) {
-      $albumIds = $albums->pluck('album_id');
-      $previewPages = Page::whereIn('album_id', $albumIds)
-        ->orderBy('sort_order', 'asc')
-        ->get()
-        ->groupBy('album_id')
-        ->map(fn($pages) => $pages->first());
-      $albums->each(function ($album) use ($previewPages) {
-        $album->setRelation('previewPage', collect([$previewPages->get($album->album_id)])->filter());
-      });
-    }
     return AlbumResource::collection($albums);
   }
 
