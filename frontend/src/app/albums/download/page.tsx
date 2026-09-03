@@ -100,12 +100,23 @@ export default function DownloadAlbumsPage() {
 
       const queuedCount = result.data?.queued?.length ?? 0;
       const existingCount = result.data?.existing?.length ?? 0;
+      const existingAlbums = result.data?.existing ?? [];
 
       console.log(
         `Queued ${queuedCount} album(s). ${existingCount} already existed.`,
       );
 
       setInput("");
+
+      if (
+        parsed.validIds.length === 1 &&
+        queuedCount === 0 &&
+        existingCount === 1 &&
+        existingAlbums[0] === parsed.validIds[0]
+      ) {
+        router.push(`/?search=${encodeURIComponent(parsed.validIds[0])}`);
+        return;
+      }
 
       router.push("/");
     } catch (error) {

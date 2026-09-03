@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0",
+    "dev": "next dev",
+    "dev:host": "next dev -- -H 0.0.0.0 -p 5000",
+    "dev:log": "npm run dev -- -H 0.0.0.0 -p 5000 >> app.log 2>&1",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

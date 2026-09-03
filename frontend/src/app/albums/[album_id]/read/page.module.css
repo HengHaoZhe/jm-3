@@ -30,6 +30,19 @@
   min-width: 0;
 }
 
+.toolbarCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbarRight {
+  position: absolute;
+  right: 20px;
+  display: flex;
+  align-items: center;
+}
+
 .toolbarButton {
   display: flex;
   align-items: center;
@@ -122,10 +135,39 @@
   border-color: #666;
 }
 
-.resumeIndicator {
-  color: #888;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+.modeButton {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #181818;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.modeButton:hover {
+  background: #292929;
+  color: #fff;
+}
+
+.modeButtonActive {
+  border-color: #555;
+  background: #292929;
+  color: #fff;
+}
+
+.modeIcon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.modeText {
+  white-space: nowrap;
 }
 
 .progressTrack {
@@ -143,6 +185,11 @@
   transition: width 0.2s ease;
 }
 
+/*
+
+* Single-page reader
+  */
+
 .singlePage {
   position: relative;
   flex: 1 1 auto;
@@ -155,9 +202,6 @@
   padding: 12px;
 }
 
-/*
- * Left and right click zones.
- */
 .pageNavigation {
   position: absolute;
   top: 0;
@@ -197,7 +241,7 @@
   cursor: default;
 }
 
-.singlePage .page {
+.singlePageItem {
   position: relative;
   width: 100%;
   height: 100%;
@@ -210,7 +254,7 @@
   line-height: 0;
 }
 
-.singlePage .page img {
+.singlePageItem img {
   display: block;
   width: auto;
   height: auto;
@@ -220,7 +264,7 @@
   margin: 0 auto;
 }
 
-.singlePage .pageNumber {
+.singlePageNumber {
   position: absolute;
   top: 8px;
   left: 8px;
@@ -234,27 +278,48 @@
   line-height: normal;
 }
 
+/*
+
+* Vertical reader
+  */
+
+.verticalReader {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .pages {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
   gap: 0;
 }
 
-.page {
+.verticalPage {
   position: relative;
   width: 100%;
   max-width: 1000px;
   margin: 0;
   line-height: 0;
+  cursor: pointer;
   scroll-margin-top: 70px;
 }
 
-.page img {
+.verticalPage img {
   display: block;
   width: 100%;
   height: auto;
   background: #222;
+}
+
+.verticalPageActive {
+  outline: none;
 }
 
 .pageNumber {
@@ -269,7 +334,13 @@
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   line-height: normal;
+  pointer-events: none;
 }
+
+/*
+
+* Footer
+  */
 
 .footer {
   display: flex;
@@ -302,6 +373,11 @@
   opacity: 0.35;
 }
 
+/*
+
+* Loading / error states
+  */
+
 .message {
   display: flex;
   min-height: 100dvh;
@@ -331,59 +407,6 @@
   color: #111;
   font-size: 14px;
   font-weight: 600;
-}
-
-@media (max-width: 600px) {
-  .toolbar {
-    padding: 8px 10px;
-  }
-
-  .toolbarLeft {
-    left: 10px;
-    gap: 10px;
-  }
-
-  .backText {
-    display: none;
-  }
-
-  .title span {
-    max-width: 120px;
-  }
-
-  .navigation {
-    gap: 4px;
-  }
-
-  .navButton {
-    width: 32px;
-    height: 32px;
-  }
-
-  .pageJump input {
-    width: 36px;
-  }
-
-  .singlePage {
-    padding: 6px;
-  }
-
-  .singlePage .pageNumber {
-    top: 6px;
-    left: 6px;
-  }
-
-  .footer {
-    min-height: 64px;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 8px 10px;
-  }
-
-  .footerButton {
-    min-width: 90px;
-    padding: 8px 10px;
-  }
 }
 
 .imageLoading {
@@ -448,4 +471,80 @@
 
 .retryButton:hover {
   background: #292929;
+}
+
+@media (max-width: 600px) {
+  .toolbar {
+    padding: 8px 10px;
+  }
+
+  .toolbarLeft {
+    left: 10px;
+    gap: 10px;
+  }
+
+  .toolbarRight {
+    right: 10px;
+  }
+
+  .backText {
+    display: none;
+  }
+
+  .title span {
+    max-width: 100px;
+  }
+
+  .navigation {
+    gap: 4px;
+  }
+
+  .navButton {
+    width: 32px;
+    height: 32px;
+  }
+
+  .pageJump input {
+    width: 36px;
+  }
+
+  .modeButton {
+    width: 34px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .modeText {
+    display: none;
+  }
+
+  .singlePage {
+    padding: 6px;
+  }
+
+  .singlePageNumber {
+    top: 6px;
+    left: 6px;
+  }
+
+  .verticalPage {
+    max-width: none;
+  }
+
+  .pageNumber {
+    top: 6px;
+    left: 6px;
+  }
+
+  .footer {
+    min-height: 64px;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 10px;
+  }
+
+  .footerButton {
+    min-width: 90px;
+    padding: 8px 10px;
+  }
 }

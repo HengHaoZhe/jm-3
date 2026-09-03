@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import styles from "./page.module.css";
 import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
 
@@ -37,9 +38,10 @@ interface AlbumsResponse {
   };
 }
 
-const API_URL = await getApiBaseUrl();
-
 export default function Home() {
+  const searchParams = useSearchParams();
+
+  const [apiBaseUrl, setApiBaseUrl] = useState("");
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +85,9 @@ export default function Home() {
   }, [albums]);
 
   function getPreviewUrl(album: Album) {
-    return `${API_URL}/api/albums/${encodeURIComponent(
+    const baseUrl = apiBaseUrl || "";
+
+    return `${baseUrl}/api/albums/${encodeURIComponent(
       album.album_id,
     )}/pages/1/image`;
   }
@@ -107,58 +111,24 @@ export default function Home() {
     const previewHeight = isMobile ? 315 : 330;
     const offset = isMobile ? 12 : 16;
     const viewportPadding = 12;
+    const maxX = window.innerWidth - previewWidth - viewportPadding;
+    const maxY = window.innerHeight - previewHeight - viewportPadding;
 
     let x = clientX + offset;
     let y = clientY + offset;
 
-    /*
-     * If the preview would extend beyond the right side,
-     * place it to the left of the pointer/tap.
-     */
     if (x + previewWidth > window.innerWidth - viewportPadding) {
       x = clientX - previewWidth - offset;
     }
 
-    /*
-     * If the preview would extend beyond the bottom,
-     * place it above the pointer/tap.
-     */
     if (y + previewHeight > window.innerHeight - viewportPadding) {
       y = clientY - previewHeight - offset;
     }
 
-    /*
-     * Keep the preview inside the left edge.
-     */
-    if (x < viewportPadding) {
-      x = viewportPadding;
-    }
+    x = Math.min(Math.max(x, viewportPadding), Math.max(viewportPadding, maxX));
+    y = Math.min(Math.max(y, viewportPadding), Math.max(viewportPadding, maxY));
 
-    /*
-     * Keep the preview inside the right edge.
-     */
-    if (x + previewWidth > window.innerWidth - viewportPadding) {
-      x = window.innerWidth - previewWidth - viewportPadding;
-    }
-
-    /*
-     * Keep the preview inside the top edge.
-     */
-    if (y < viewportPadding) {
-      y = viewportPadding;
-    }
-
-    /*
-     * Keep the preview inside the bottom edge.
-     */
-    if (y + previewHeight > window.innerHeight - viewportPadding) {
-      y = window.innerHeight - previewHeight - viewportPadding;
-    }
-
-    setPreviewPosition({
-      x,
-      y,
-    });
+    setPreviewPosition({ x, y });
   }
 
   function handleRowMouseEnter(
@@ -235,30 +205,20 @@ export default function Home() {
     setPreviewError(false);
   }
 
-  async function refreshAlbums() {
+  async function loadAlbums(isBackgroundPolling: boolean) {
     try {
-      const response = await apiFetch("/albums");
-
-      if (!response.ok) {
-        return;
+      if (!isBackgroundPolling) {
+        setLoading(true);
+        setError(null);
       }
 
-      const result: AlbumsResponse = await response.json();
-
-      setAlbums(result.data);
-    } catch {
-      // Ignore background polling errors.
-    }
-  }
-
-  async function fetchAlbums() {
-    try {
-      setLoading(true);
-      setError(null);
-
       const response = await apiFetch("/albums");
 
       if (!response.ok) {
+        if (isBackgroundPolling) {
+          return;
+        }
+
         throw new Error(`Failed to fetch albums (${response.status})`);
       }
 
@@ -266,18 +226,48 @@ export default function Home() {
 
       setAlbums(result.data);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to load albums.");
+      if (isBackgroundPolling) {
+        return;
       }
+
+      setError(err instanceof Error ? err.message : "Failed to load albums.");
     } finally {
-      setLoading(false);
+      if (!isBackgroundPolling) {
+        setLoading(false);
+      }
     }
   }
 
+  function refreshAlbums() {
+    return loadAlbums(true);
+  }
+
   useEffect(() => {
-    fetchAlbums();
+    const urlSearch = searchParams.get("search");
+
+    if (urlSearch !== null) {
+      setSearch(urlSearch);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    let active = true;
+
+    getApiBaseUrl()
+      .then((url) => {
+        if (active) {
+          setApiBaseUrl(url);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    loadAlbums(false);
   }, []);
 
   /*
@@ -327,7 +317,7 @@ export default function Home() {
       return matchesStatus && matchesSearch;
     });
 
-    return [...filtered].sort((a, b) => {
+    return filtered.sort((a, b) => {
       let comparison = 0;
 
       switch (sortColumn) {
@@ -407,6 +397,19 @@ export default function Home() {
     window.alert("All reading progress has been cleared.");
   }
 
+  async function getErrorMessage(
+    response: Response,
+    defaultMsg: string,
+  ): Promise<string> {
+    try {
+      const result = await response.json();
+
+      return result.message || defaultMsg;
+    } catch {
+      return defaultMsg;
+    }
+  }
+
   async function handleRedownloadFailed() {
     if (statusCounts.failed === 0) {
       return;
@@ -430,19 +433,12 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        let message = `Failed to redownload failed albums (${response.status}).`;
-
-        try {
-          const result = await response.json();
-
-          if (result.message) {
-            message = result.message;
-          }
-        } catch {
-          // Use default error message.
-        }
-
-        throw new Error(message);
+        throw new Error(
+          await getErrorMessage(
+            response,
+            `Failed to redownload failed albums (${response.status}).`,
+          ),
+        );
       }
 
       await refreshAlbums();
@@ -475,19 +471,12 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        let message = `Failed to delete album (${response.status}).`;
-
-        try {
-          const result = await response.json();
-
-          if (result.message) {
-            message = result.message;
-          }
-        } catch {
-          // Use default error message.
-        }
-
-        throw new Error(message);
+        throw new Error(
+          await getErrorMessage(
+            response,
+            `Failed to delete album (${response.status}).`,
+          ),
+        );
       }
 
       setAlbums((currentAlbums) =>
@@ -557,7 +546,7 @@ export default function Home() {
 
             <p>Make sure the Laravel API is running at:</p>
 
-            <code>{API_URL}</code>
+            <code>{apiBaseUrl || "http://localhost:8000"}</code>
           </div>
         )}
 

@@ -9,7 +9,6 @@ use App\Http\Requests\UpdateAlbumRequest;
 use App\Http\Resources\AlbumResource;
 use App\Jobs\DownloadAlbumJob;
 use App\Models\Album;
-use App\Models\Page;
 use App\Services\AlbumImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,8 +31,10 @@ class AlbumController extends Controller
    */
   public function store(StoreAlbumRequest $request)
   {
+    $requestStart = microtime(true);
     $albumId = $request->album_id;
 
+    $dbStart = microtime(true);
     File::ensureDirectoryExists(
       config('manga.storage_path') . DIRECTORY_SEPARATOR . $albumId
     );
@@ -43,8 +44,18 @@ class AlbumController extends Controller
       'title' => '',
       'status' => 'queued',
     ]);
+    $albumDbInsertTime = microtime(true) - $dbStart;
 
+    $dispatchStart = microtime(true);
     DownloadAlbumJob::dispatch($album);
+    $jobDispatchTime = microtime(true) - $dispatchStart;
+
+    logger()->info('ALBUM CREATE: request complete', [
+      'album_id' => $albumId,
+      'album_db_insert_time' => $albumDbInsertTime,
+      'job_dispatch_time' => $jobDispatchTime,
+      'total_album_create_request_time' => microtime(true) - $requestStart,
+    ]);
 
     return new AlbumResource($album);
   }
@@ -52,15 +63,12 @@ class AlbumController extends Controller
   /**
    * Display the specified resource.
    */
-  public function show(Request $request, string $album_id)
+  public function show(Request $request, Album $album)
   {
     $perPage = min(
       max((int) $request->query('per_page', 20), 1),
       100
     );
-
-    $album = Album::where('album_id', $album_id)
-      ->firstOrFail();
 
     $pages = $album->pages()
       ->orderBy('sort_order', 'asc')
@@ -81,13 +89,9 @@ class AlbumController extends Controller
     ]);
   }
 
-  public function edit(string $album_id)
+  public function edit(Album $album)
   {
-    $album = Album::where('album_id', $album_id)->with([
-      'pages' => function ($query) {
-        $query->orderBy('sort_order', 'asc');
-      },
-    ])->firstOrFail();
+    $album->load(['pages' => fn($query) => $query->orderBy('sort_order', 'asc')]);
 
     return new AlbumResource($album);
   }
@@ -95,50 +99,20 @@ class AlbumController extends Controller
   /**
    * Update the specified resource in storage.
    */
-  // public function update(UpdateAlbumRequest $request, string $album_id)
-  // {
-  //   $start = microtime(true);
-
-  //   $validated = $request->validated();
-
-  //   logger()->info('ALBUM UPDATE: validation', [
-  //     'time' => microtime(true) - $start,
-  //   ]);
-
-  //   $album = Album::where('album_id', $album_id)->firstOrFail();
-
-  //   logger()->info('ALBUM UPDATE: find album', [
-  //     'time' => microtime(true) - $start,
-  //   ]);
-
-  //   $album->update($validated);
-
-  //   logger()->info('ALBUM UPDATE: model update', [
-  //     'time' => microtime(true) - $start,
-  //   ]);
-
-  //   return response()->json([
-  //     'message' => 'Album updated successfully.',
-  //   ]);
-  // }
-  public function update(UpdateAlbumRequest $request, string $album_id)
+  public function update(UpdateAlbumRequest $request, Album $album)
   {
-    $album = Album::where('album_id', $album_id)->firstOrFail();
     $album->update($request->validated());
-    return response()->json(['message' => 'Album updated successfully.',]);
+    return response()->json(['message' => 'Album updated successfully.']);
   }
 
   /**
    * Remove the specified resource from storage.
    */
-  public function destroy(string $album_id)
+  public function destroy(Album $album)
   {
-    $album = Album::where('album_id', $album_id)->firstOrFail();
-
     $albumDirectory = config('manga.storage_path') . DIRECTORY_SEPARATOR . $album->album_id;
 
-    // Delete database record.
-    // The pages are deleted automatically through the foreign key cascade.
+    // Delete database record (foreign key cascade deletes pages automatically).
     $album->delete();
 
     // Delete the physical album directory.
@@ -151,10 +125,8 @@ class AlbumController extends Controller
     ]);
   }
 
-  public function countPages(string $album_id, AlbumImportService $importService)
+  public function countPages(Album $album, AlbumImportService $importService)
   {
-    $album = Album::where('album_id', $album_id)->firstOrFail();
-
     try {
       $importService->countPages($album);
     } catch (RuntimeException $e) {
@@ -168,73 +140,80 @@ class AlbumController extends Controller
 
   public function bulkStore(BulkStoreAlbumRequest $request)
   {
-    $albumIds = $request->validated('album_ids');
+    $requestStart = microtime(true);
+    $albumIds = array_unique($request->validated('album_ids'));
 
-    $existingAlbumIds = Album::whereIn('album_id', $albumIds)
-      ->pluck('album_id')
-      ->toArray();
+    // Single query to identify existing records
+    $existing = Album::whereIn('album_id', $albumIds)->pluck('album_id')->toArray();
 
-    $existingLookup = array_flip($existingAlbumIds);
+    // Native array operations replace double foreach loops
+    $newAlbumIds = array_values(array_diff($albumIds, $existing));
 
     $queued = [];
-    $existing = [];
 
-    foreach ($albumIds as $albumId) {
-      if (isset($existingLookup[$albumId])) {
-        $existing[] = $albumId;
-        continue;
-      }
+    if (!empty($newAlbumIds)) {
+      $timestamp = now();
 
-      File::ensureDirectoryExists(
-        config('manga.storage_path') . DIRECTORY_SEPARATOR . $albumId
-      );
-
-      $album = Album::create([
-        'album_id' => $albumId,
+      $albumRows = array_map(fn($id) => [
+        'album_id' => $id,
         'title' => '',
         'status' => 'queued',
         'page_count' => 0,
-      ]);
+        'created_at' => $timestamp,
+        'updated_at' => $timestamp,
+      ], $newAlbumIds);
 
-      DownloadAlbumJob::dispatch($album);
+      $dbStart = microtime(true);
 
-      $queued[] = $albumId;
+      // Prevent race conditions with ignore
+      DB::table('albums')->insertOrIgnore($albumRows);
+
+      $albumDbInsertTime = microtime(true) - $dbStart;
+
+      // Query model instances directly once to avoid re-querying
+      $createdAlbums = Album::whereIn('album_id', $newAlbumIds)->get();
+
+      foreach ($createdAlbums as $album) {
+        $dispatchStart = microtime(true);
+
+        // Pass model instance directly
+        DownloadAlbumJob::dispatch($album);
+
+        logger()->info('ALBUM CREATE: queued', [
+          'album_id' => $album->album_id,
+          'album_db_insert_time' => $albumDbInsertTime,
+          'job_dispatch_time' => microtime(true) - $dispatchStart,
+        ]);
+
+        $queued[] = $album->album_id;
+      }
     }
+
+    logger()->info('ALBUM CREATE: bulk request complete', [
+      'album_ids' => $albumIds,
+      'queued_count' => count($queued),
+      'existing_count' => count($existing),
+      'total_bulk_create_request_time' => microtime(true) - $requestStart,
+    ]);
 
     return response()->json([
       'data' => [
-        'queued' => $queued,
-        'existing' => $existing,
-        'failed' => [],
+        'queued'   => $queued,
+        'existing' => array_values($existing),
+        'failed'   => [],
       ],
     ]);
   }
 
-  public function redownload(string $album_id)
+  public function redownload(Album $album)
   {
-    $album = Album::where('album_id', $album_id)->firstOrFail();
-
     if (in_array($album->status, ['queued', 'downloading'], true)) {
       return response()->json([
         'message' => 'Album is already queued or downloading.',
       ], 422);
     }
 
-    File::ensureDirectoryExists(
-      config('manga.storage_path') . DIRECTORY_SEPARATOR . $album->album_id
-    );
-
-    DB::transaction(function () use ($album) {
-      // Clear previously imported pages so the next run rebuilds them.
-      $album->pages()->delete();
-
-      $album->update([
-        'status' => 'queued',
-        'page_count' => 0,
-      ]);
-    });
-
-    DownloadAlbumJob::dispatch($album);
+    $this->requeueAlbum($album);
 
     return new AlbumResource(
       $album->fresh()->load('pages')
@@ -257,21 +236,7 @@ class AlbumController extends Controller
     $queuedAlbumIds = [];
 
     foreach ($failedAlbums as $album) {
-      File::ensureDirectoryExists(
-        config('manga.storage_path') . DIRECTORY_SEPARATOR . $album->album_id
-      );
-
-      DB::transaction(function () use ($album) {
-        // Clear previously imported pages so the next run rebuilds them.
-        $album->pages()->delete();
-
-        $album->update([
-          'status' => 'queued',
-          'page_count' => 0,
-        ]);
-      });
-
-      DownloadAlbumJob::dispatch($album);
+      $this->requeueAlbum($album);
       $queuedAlbumIds[] = $album->album_id;
     }
 
@@ -283,10 +248,8 @@ class AlbumController extends Controller
     ]);
   }
 
-  public function importPages(string $album_id, AlbumImportService $importService)
+  public function importPages(Album $album, AlbumImportService $importService)
   {
-    $album = Album::where('album_id', $album_id)->firstOrFail();
-
     try {
       $importService->import($album);
     } catch (RuntimeException $e) {
@@ -294,21 +257,40 @@ class AlbumController extends Controller
         'message' => $e->getMessage(),
       ], 422);
     }
+
     $album->update([
       'status' => 'completed',
     ]);
+
     return new AlbumResource(
       $album->fresh()->load('pages')
     );
   }
 
-  public function reader(string $album_id)
+  public function reader(Album $album)
   {
-    $album = Album::where('album_id', $album_id)->with([
-      'pages' => function ($query) {
-        $query->orderBy('sort_order', 'asc');
-      },
-    ])->firstOrFail();
-    return new AlbumResource($album);
+    return $this->edit($album);
+  }
+
+  /**
+   * Helper to clear and requeue an album for downloading.
+   */
+  private function requeueAlbum(Album $album): void
+  {
+    File::ensureDirectoryExists(
+      config('manga.storage_path') . DIRECTORY_SEPARATOR . $album->album_id
+    );
+
+    DB::transaction(function () use ($album) {
+      // Clear previously imported pages so the next run rebuilds them.
+      $album->pages()->delete();
+
+      $album->update([
+        'status' => 'queued',
+        'page_count' => 0,
+      ]);
+    });
+
+    DownloadAlbumJob::dispatch($album);
   }
 }

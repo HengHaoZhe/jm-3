@@ -17,39 +17,70 @@ class AlbumImportService
    */
   public function import(Album $album): void
   {
-    $albumDirectory = config('manga.storage_path') . DIRECTORY_SEPARATOR . $album->album_id;
+    $albumId = $album->album_id;
+    $importStart = microtime(true);
+    $albumDirectory = config('manga.storage_path') . DIRECTORY_SEPARATOR . $albumId;
 
     if (!File::isDirectory($albumDirectory)) {
       throw new RuntimeException("Album directory does not exist: {$albumDirectory}");
     }
 
+    $scanStart = microtime(true);
     $files = $this->findImageFiles($albumDirectory);
+    $fileScanDuration = microtime(true) - $scanStart;
 
     if (empty($files)) {
-      throw new RuntimeException("No image files found for album {$album->album_id}.");
+      throw new RuntimeException("No image files found for album {$albumId}.");
     }
 
+    $sortStart = microtime(true);
     $files = $this->sortFiles($files, $albumDirectory);
+    $fileSortDuration = microtime(true) - $sortStart;
 
-    DB::transaction(function () use ($album, $files, $albumDirectory) {
+    $prepareStart = microtime(true);
+    $pageRows = [];
+    $sortOrder = 1;
+    $timestamp = now();
+
+    foreach ($files as $file) {
+      $pageRows[] = [
+        'album_id' => $album->album_id,
+        'sort_order' => $sortOrder,
+        'file_path' => $this->getRelativePath($file, $albumDirectory),
+        'created_at' => $timestamp,
+        'updated_at' => $timestamp,
+      ];
+      $sortOrder++;
+    }
+    $pagePreparationDuration = microtime(true) - $prepareStart;
+
+    $insertStart = microtime(true);
+    $chunkCount = 0;
+
+    DB::transaction(function () use ($album, $pageRows, $albumDirectory, &$chunkCount) {
       // Remove any existing page records.
       $album->pages()->delete();
 
-      $sortOrder = 1;
-
-      foreach ($files as $file) {
-        Page::create([
-          'album_id' => $album->album_id,
-          'sort_order' => $sortOrder,
-          'file_path' => $this->getRelativePath($file, $albumDirectory),
-        ]);
-        $sortOrder++;
+      foreach (array_chunk($pageRows, 500) as $chunk) {
+        DB::table('pages')->insert($chunk);
+        $chunkCount++;
       }
 
       $album->update([
-        'page_count' => count($files),
+        'page_count' => count($pageRows),
       ]);
     });
+    $pageInsertDuration = microtime(true) - $insertStart;
+
+    logger()->info('ALBUM IMPORT: complete', [
+      'album_id' => $albumId,
+      'files_processed' => count($files),
+      'pages_processed' => count($pageRows),
+      'page_preparation_duration' => $pagePreparationDuration,
+      'bulk_insert_duration' => $pageInsertDuration,
+      'insert_chunks' => $chunkCount,
+      'total_page_import_duration' => microtime(true) - $importStart,
+    ]);
   }
 
   public function countPages(Album $album): int

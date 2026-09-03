@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\File;
 use RuntimeException;
+use Throwable;
 
 class MangaDownloadService
 {
@@ -34,6 +35,7 @@ class MangaDownloadService
    */
   public function download(string $albumId): void
   {
+    $downloadStart = microtime(true);
     $python = 'py';
 
     $script = $this->downloaderDirectory . DIRECTORY_SEPARATOR . 'jm-downloader.py';
@@ -52,18 +54,36 @@ class MangaDownloadService
       $output = [];
       $exitCode = 0;
 
+      $execStart = microtime(true);
       // Run Python from the album's temporary directory.
       exec(
         'cd /d ' . escapeshellarg($workingDirectory) . ' && ' . $command . ' 2>&1',
         $output,
         $exitCode
       );
+      $downloadExecDuration = microtime(true) - $execStart;
 
       if ($exitCode !== 0) {
         throw new RuntimeException("Failed to download album {$albumId}:\n" . implode("\n", $output));
       }
 
+      $moveStart = microtime(true);
       $this->organizeDownloadedFiles($albumId, $workingDirectory);
+      $fileMoveDuration = microtime(true) - $moveStart;
+
+      logger()->info('ALBUM DOWNLOAD: complete', [
+        'album_id' => $albumId,
+        'download_exec_duration' => $downloadExecDuration,
+        'file_move_organization_duration' => $fileMoveDuration,
+        'total_download_duration' => microtime(true) - $downloadStart,
+      ]);
+    } catch (Throwable $e) {
+      logger()->error('ALBUM DOWNLOAD: failed', [
+        'album_id' => $albumId,
+        'total_download_duration' => microtime(true) - $downloadStart,
+        'exception' => $e->getMessage(),
+      ]);
+      throw $e;
     } finally {
       // Always remove the temporary directory.
       if (File::isDirectory($workingDirectory)) {

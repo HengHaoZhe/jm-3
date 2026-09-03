@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { DragEvent, useEffect, useState } from "react";
+import { DragEvent, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import styles from "../page.module.css";
 import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
@@ -98,6 +98,82 @@ export default function EditAlbumPage() {
     null,
   );
 
+  /*
+   * EDGE AUTO-SCROLL
+   *
+   * The animation frame keeps scrolling smoothly while the user
+   * holds an item near the top/bottom edge of the viewport.
+   */
+  const autoScrollFrameRef = useRef<number | null>(null);
+  const autoScrollYRef = useRef<number | null>(null);
+
+  const EDGE_SCROLL_ZONE = 120;
+  const MAX_SCROLL_SPEED = 18;
+
+  function stopAutoScroll() {
+    autoScrollYRef.current = null;
+
+    if (autoScrollFrameRef.current !== null) {
+      cancelAnimationFrame(autoScrollFrameRef.current);
+      autoScrollFrameRef.current = null;
+    }
+  }
+
+  function runAutoScroll() {
+    if (autoScrollYRef.current === null) {
+      autoScrollFrameRef.current = null;
+      return;
+    }
+
+    const clientY = autoScrollYRef.current;
+    const viewportHeight = window.innerHeight;
+
+    let scrollAmount = 0;
+
+    /*
+     * Near the top:
+     * closer to the edge = faster upward scrolling
+     */
+    if (clientY < EDGE_SCROLL_ZONE) {
+      const distance = Math.max(clientY, 0);
+      const intensity = 1 - distance / EDGE_SCROLL_ZONE;
+
+      scrollAmount = -Math.max(2, intensity * MAX_SCROLL_SPEED);
+    } else if (clientY > viewportHeight - EDGE_SCROLL_ZONE) {
+      /*
+       * Near the bottom:
+       * closer to the edge = faster downward scrolling
+       */
+      const distance = Math.max(viewportHeight - clientY, 0);
+      const intensity = 1 - distance / EDGE_SCROLL_ZONE;
+
+      scrollAmount = Math.max(2, intensity * MAX_SCROLL_SPEED);
+    }
+
+    if (scrollAmount !== 0) {
+      window.scrollBy({
+        top: scrollAmount,
+        behavior: "auto",
+      });
+    }
+
+    autoScrollFrameRef.current = requestAnimationFrame(runAutoScroll);
+  }
+
+  function updateAutoScroll(clientY: number) {
+    autoScrollYRef.current = clientY;
+
+    if (autoScrollFrameRef.current === null) {
+      autoScrollFrameRef.current = requestAnimationFrame(runAutoScroll);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      stopAutoScroll();
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -160,11 +236,7 @@ export default function EditAlbumPage() {
    * - from one group to another
    */
 
-  function handleDragStart(
-    event: DragEvent<HTMLDivElement>,
-    groupName: string,
-    pageId: number,
-  ) {
+  function handleDragStart(event: DragEvent<HTMLDivElement>, pageId: number) {
     if (editBusy) {
       event.preventDefault();
       return;
@@ -175,18 +247,18 @@ export default function EditAlbumPage() {
 
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", String(pageId));
-    event.dataTransfer.setData("application/x-album-page", String(pageId));
-    event.dataTransfer.setData("application/x-album-group", groupName);
   }
 
-  function handleDragOver(
-    event: DragEvent<HTMLDivElement>,
-    groupName: string,
-    pageId: number,
-  ) {
+  function handleDragOver(event: DragEvent<HTMLDivElement>, pageId: number) {
     if (editBusy || draggedPageId === null) {
       return;
     }
+
+    /*
+     * Keep updating the auto-scroll position even when the
+     * dragged item is currently over another page.
+     */
+    updateAutoScroll(event.clientY);
 
     if (pageId === draggedPageId) {
       return;
@@ -209,6 +281,8 @@ export default function EditAlbumPage() {
     targetPageId: number,
   ) {
     event.preventDefault();
+
+    stopAutoScroll();
 
     const sourcePageId = draggedPageId;
 
@@ -285,6 +359,8 @@ export default function EditAlbumPage() {
   }
 
   function handleDragEnd() {
+    stopAutoScroll();
+
     setDraggedPageId(null);
     setDragOverPageId(null);
   }
@@ -313,11 +389,16 @@ export default function EditAlbumPage() {
     event: DragEvent<HTMLElement>,
     groupName: string,
   ) {
-    if (
-      editBusy ||
-      draggedGroupName === null ||
-      draggedGroupName === groupName
-    ) {
+    if (editBusy || draggedGroupName === null) {
+      return;
+    }
+
+    /*
+     * Group dragging also uses the same edge auto-scroll.
+     */
+    updateAutoScroll(event.clientY);
+
+    if (draggedGroupName === groupName) {
       return;
     }
 
@@ -332,6 +413,8 @@ export default function EditAlbumPage() {
   ) {
     event.preventDefault();
 
+    stopAutoScroll();
+
     const sourceGroupName = draggedGroupName;
 
     if (
@@ -344,13 +427,24 @@ export default function EditAlbumPage() {
     }
 
     setEditGroups((currentGroups) => {
-      const sourceIndex = currentGroups.findIndex(
-        (group) => group.name === sourceGroupName,
-      );
+      let sourceIndex = -1;
+      let targetIndex = -1;
 
-      const targetIndex = currentGroups.findIndex(
-        (group) => group.name === targetGroupName,
-      );
+      for (let index = 0; index < currentGroups.length; index += 1) {
+        const group = currentGroups[index];
+
+        if (group.name === sourceGroupName) {
+          sourceIndex = index;
+        }
+
+        if (group.name === targetGroupName) {
+          targetIndex = index;
+        }
+
+        if (sourceIndex !== -1 && targetIndex !== -1) {
+          break;
+        }
+      }
 
       if (sourceIndex === -1 || targetIndex === -1) {
         return currentGroups;
@@ -368,16 +462,22 @@ export default function EditAlbumPage() {
   }
 
   function handleGroupDragEnd() {
+    stopAutoScroll();
+
     setDraggedGroupName(null);
     setDragOverGroupName(null);
+  }
+
+  function resetErrors() {
+    setCountError(null);
+    setSaveError(null);
+    setImportError(null);
   }
 
   async function countPages() {
     try {
       setCountingPages(true);
-      setCountError(null);
-      setSaveError(null);
-      setImportError(null);
+      resetErrors();
 
       const response = await apiFetch(`/albums/${albumId}/count-pages`, {
         method: "POST",
@@ -396,10 +496,7 @@ export default function EditAlbumPage() {
 
       setAlbum(result.data);
       setEditPageCount(String(result.data.page_count));
-
-      if (result.data.pages?.length || result.data.groups?.length) {
-        setEditGroups(getAlbumGroups(result.data));
-      }
+      setEditGroups(getAlbumGroups(result.data));
     } catch (err) {
       setCountError(
         err instanceof Error ? err.message : "Failed to count pages.",
@@ -412,9 +509,7 @@ export default function EditAlbumPage() {
   async function importPages() {
     try {
       setImporting(true);
-      setImportError(null);
-      setCountError(null);
-      setSaveError(null);
+      resetErrors();
 
       const response = await apiFetch(`/albums/${albumId}/import-pages`, {
         method: "POST",
@@ -455,12 +550,7 @@ export default function EditAlbumPage() {
 
     try {
       setSaving(true);
-      setSaveError(null);
-      setCountError(null);
-      setImportError(null);
-
-      console.time("SAVE TOTAL");
-      console.time("ALBUM UPDATE");
+      resetErrors();
 
       const albumResponse = await apiFetch(`/albums/${albumId}`, {
         method: "PUT",
@@ -473,8 +563,6 @@ export default function EditAlbumPage() {
           page_count: pageCount,
         }),
       });
-
-      console.timeEnd("ALBUM UPDATE");
 
       if (!albumResponse.ok) {
         throw new Error(
@@ -497,9 +585,6 @@ export default function EditAlbumPage() {
         group.pages.map((page) => page.id),
       );
 
-      console.log("PAGE COUNT:", pageIds.length);
-      console.time("PAGE REORDER");
-
       const reorderResponse = await apiFetch(`/albums/${albumId}/pages/order`, {
         method: "PUT",
         headers: {
@@ -510,8 +595,6 @@ export default function EditAlbumPage() {
         }),
       });
 
-      console.timeEnd("PAGE REORDER");
-
       if (!reorderResponse.ok) {
         throw new Error(
           await getErrorMessage(
@@ -521,11 +604,8 @@ export default function EditAlbumPage() {
         );
       }
 
-      console.timeEnd("SAVE TOTAL");
-
       router.push(`/albums/${albumId}`);
     } catch (err) {
-      console.timeEnd("SAVE TOTAL");
       setSaveError(
         err instanceof Error ? err.message : "Failed to update album.",
       );
@@ -536,17 +616,22 @@ export default function EditAlbumPage() {
 
   const editBusy = saving || countingPages || importing;
 
+  const totalPageCount = editGroups.reduce(
+    (count, group) => count + group.pages.length,
+    0,
+  );
+
+  const cumulativePageTotals = editGroups.reduce<number[]>((totals, group) => {
+    const previousTotal = totals.length === 0 ? 0 : totals[totals.length - 1];
+
+    totals.push(previousTotal + group.pages.length);
+    return totals;
+  }, []);
+
   function renderGroupPages(group: AlbumGroup, groupIndex: number) {
     return group.pages.map((page, pageIndex) => {
       const pageNumber =
-        editGroups
-          .slice(0, groupIndex)
-          .reduce(
-            (count, previousGroup) => count + previousGroup.pages.length,
-            0,
-          ) +
-        pageIndex +
-        1;
+        (cumulativePageTotals[groupIndex - 1] ?? 0) + pageIndex + 1;
 
       const isDragging = draggedPageId === page.id;
       const isDragOver = dragOverPageId === page.id;
@@ -555,8 +640,8 @@ export default function EditAlbumPage() {
         <div
           key={page.id}
           draggable={!editBusy}
-          onDragStart={(event) => handleDragStart(event, group.name, page.id)}
-          onDragOver={(event) => handleDragOver(event, group.name, page.id)}
+          onDragStart={(event) => handleDragStart(event, page.id)}
+          onDragOver={(event) => handleDragOver(event, page.id)}
           onDrop={(event) => handleDrop(event, group.name, page.id)}
           onDragEnd={handleDragEnd}
           className={[
@@ -621,7 +706,7 @@ export default function EditAlbumPage() {
   return (
     <main className={styles.page}>
       <div className={styles.container}>
-        <Link href={`/albums/${album.album_id}`} className={styles.backLink}>
+        <Link href={`/albums/${albumId}`} className={styles.backLink}>
           ← Back to Album
         </Link>
 
@@ -741,66 +826,51 @@ export default function EditAlbumPage() {
                 </div>
 
                 <span className={styles.pageOrderCount}>
-                  {editGroups.reduce(
-                    (count, group) => count + group.pages.length,
-                    0,
-                  )}{" "}
-                  {editGroups.reduce(
-                    (count, group) => count + group.pages.length,
-                    0,
-                  ) === 1
-                    ? "page"
-                    : "pages"}
+                  {totalPageCount} {totalPageCount === 1 ? "page" : "pages"}
                 </span>
               </div>
 
               <div className={styles.pageOrderList}>
-                {editGroups.map((group, groupIndex) =>
-                  editGroups.length > 1 ? (
-                    <details key={group.name} className={styles.pageOrderGroup}>
-                      <summary
-                        draggable={editGroups.length > 1 && !editBusy}
-                        onDragStart={(event) =>
-                          handleGroupDragStart(event, group.name)
-                        }
-                        onDragOver={(event) =>
-                          handleGroupDragOver(event, group.name)
-                        }
-                        onDrop={(event) => handleGroupDrop(event, group.name)}
-                        onDragEnd={handleGroupDragEnd}
-                        className={[
-                          styles.pageOrderGroupHeader,
-                          "d-flex",
-                          "align-items-center",
-                          "justify-content-between",
-                          draggedGroupName === group.name
-                            ? styles.pageOrderGroupDragging
-                            : "",
-                          dragOverGroupName === group.name
-                            ? styles.pageOrderGroupDragOver
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        <strong>{group.name}</strong>
+                {editGroups.map((group, groupIndex) => (
+                  <details key={group.name} className={styles.pageOrderGroup}>
+                    <summary
+                      draggable={editGroups.length > 1 && !editBusy}
+                      onDragStart={(event) =>
+                        handleGroupDragStart(event, group.name)
+                      }
+                      onDragOver={(event) =>
+                        handleGroupDragOver(event, group.name)
+                      }
+                      onDrop={(event) => handleGroupDrop(event, group.name)}
+                      onDragEnd={handleGroupDragEnd}
+                      className={[
+                        styles.pageOrderGroupHeader,
+                        "d-flex",
+                        "align-items-center",
+                        "justify-content-between",
+                        draggedGroupName === group.name
+                          ? styles.pageOrderGroupDragging
+                          : "",
+                        dragOverGroupName === group.name
+                          ? styles.pageOrderGroupDragOver
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <strong>{group.name}</strong>
 
-                        <span className="badge text-bg-light">
-                          {group.pages.length}{" "}
-                          {group.pages.length === 1 ? "page" : "pages"}
-                        </span>
-                      </summary>
+                      <span className="badge text-bg-light">
+                        {group.pages.length}{" "}
+                        {group.pages.length === 1 ? "page" : "pages"}
+                      </span>
+                    </summary>
 
-                      <div className={styles.pageOrderGroupPages}>
-                        {renderGroupPages(group, groupIndex)}
-                      </div>
-                    </details>
-                  ) : (
-                    <section key={group.name} className={styles.pageOrderGroup}>
+                    <div className={styles.pageOrderGroupPages}>
                       {renderGroupPages(group, groupIndex)}
-                    </section>
-                  ),
-                )}
+                    </div>
+                  </details>
+                ))}
               </div>
             </div>
 
