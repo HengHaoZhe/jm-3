@@ -91,9 +91,7 @@ class AlbumController extends Controller
 
   public function edit(Album $album)
   {
-    $album->load(['pages' => fn($query) => $query->orderBy('sort_order', 'asc')]);
-
-    return new AlbumResource($album);
+    return new AlbumResource($album->load('pages'));
   }
 
   /**

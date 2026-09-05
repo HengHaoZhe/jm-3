@@ -13,6 +13,10 @@ class Album extends Model
     'status',
     'page_count',
   ];
+  public function getRouteKeyName(): string
+  {
+    return 'album_id';
+  }
   public function pages(): HasMany
   {
     return $this->hasMany(Page::class, 'album_id', 'album_id')->orderBy('sort_order', 'asc');

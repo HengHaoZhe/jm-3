@@ -9,6 +9,8 @@ import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
 type AlbumStatus = "queued" | "downloading" | "completed" | "failed";
 type ReaderMode = "single" | "vertical";
 
+const PRELOADED_PAGE_RADIUS = 4;
+
 interface Page {
   sort_order: number;
   file_path: string;
@@ -60,6 +62,7 @@ export default function ReaderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progressRestored, setProgressRestored] = useState(false);
+  const [modeRestored, setModeRestored] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +144,7 @@ export default function ReaderPage() {
     };
   }, [albumId]);
 
+  // Refactored duplicate restoration logic
   useEffect(() => {
     if (!album) {
       return;
@@ -157,22 +161,10 @@ export default function ReaderPage() {
         requestedPage <= album.pages.length
       ) {
         restoredPage = requestedPage;
-      } else {
-        const savedPage = localStorage.getItem(getProgressKey(album.album_id));
-
-        if (savedPage) {
-          const pageNumber = Number(savedPage);
-
-          if (
-            Number.isInteger(pageNumber) &&
-            pageNumber >= 1 &&
-            pageNumber <= album.pages.length
-          ) {
-            restoredPage = pageNumber;
-          }
-        }
       }
-    } else {
+    }
+
+    if (restoredPage === 1) {
       const savedPage = localStorage.getItem(getProgressKey(album.album_id));
 
       if (savedPage) {
@@ -204,6 +196,7 @@ export default function ReaderPage() {
     setPageInput(String(currentPage));
   }, [currentPage]);
 
+  // Restore reader mode
   useEffect(() => {
     if (!album) {
       return;
@@ -214,15 +207,34 @@ export default function ReaderPage() {
     if (savedMode === "single" || savedMode === "vertical") {
       setReaderMode(savedMode);
     }
+    setModeRestored(true);
   }, [album]);
 
+  // Persist reader mode safely without overwriting initial state
   useEffect(() => {
-    if (!album) {
+    if (!album || !modeRestored) {
       return;
     }
 
     localStorage.setItem(getReaderModeKey(album.album_id), readerMode);
-  }, [album, readerMode]);
+  }, [album, readerMode, modeRestored]);
+
+  useEffect(() => {
+    if (!album || !apiUrl || readerMode !== "single") {
+      return;
+    }
+
+    const firstPage = Math.max(currentPage - 1 - PRELOADED_PAGE_RADIUS, 0);
+    const lastPage = Math.min(
+      currentPage - 1 + PRELOADED_PAGE_RADIUS + 1,
+      album.pages.length,
+    );
+
+    album.pages.slice(firstPage, lastPage).forEach((preloadedPage) => {
+      const image = new Image();
+      image.src = getImageUrl(apiUrl, preloadedPage.url);
+    });
+  }, [album, apiUrl, currentPage, readerMode]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -265,15 +277,11 @@ export default function ReaderPage() {
     setCurrentPage(page);
   }
 
+  // Simplified input submission logic relying on goToPage clamping
   function submitPageInput() {
     const pageNumber = Number(pageInput);
 
-    if (
-      !Number.isInteger(pageNumber) ||
-      !album ||
-      pageNumber < 1 ||
-      pageNumber > album.pages.length
-    ) {
+    if (!Number.isInteger(pageNumber)) {
       setPageInput(String(currentPage));
       return;
     }
@@ -318,8 +326,7 @@ export default function ReaderPage() {
           {" "}
           <h1>Album is not ready</h1>
           <p>
-            This album is currently{" "}
-            <strong>{formatStatus(album.status)}</strong>.
+            This album is currently <strong>{album.status}</strong>.
           </p>
           <Link href={`/albums/${albumId}`} className={styles.backButton}>
             ← Back to Album
@@ -544,13 +551,4 @@ export default function ReaderPage() {
       )}
     </main>
   );
-}
-
-function formatStatus(status: AlbumStatus) {
-  return {
-    queued: "queued",
-    downloading: "downloading",
-    completed: "completed",
-    failed: "failed",
-  }[status];
 }

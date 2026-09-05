@@ -12,6 +12,20 @@ type SortColumn = "id" | "album_id" | "title" | "status" | "page_count";
 type SortDirection = "asc" | "desc";
 type StatusFilter = "all" | AlbumStatus;
 
+const albumStatuses: AlbumStatus[] = [
+  "queued",
+  "downloading",
+  "completed",
+  "failed",
+];
+
+const statusLabels: Record<AlbumStatus, string> = {
+  queued: "Queued",
+  downloading: "Downloading",
+  completed: "Completed",
+  failed: "Failed",
+};
+
 interface Album {
   id: number;
   album_id: string;
@@ -23,19 +37,14 @@ interface Album {
 
 interface AlbumsResponse {
   data: Album[];
-  links?: {
-    first: string | null;
-    last: string | null;
-    prev: string | null;
-    next: string | null;
-  };
-  meta?: {
-    current_page: number;
-    from: number | null;
-    last_page: number;
-    per_page: number;
-    total: number;
-  };
+}
+
+function getAlbumTitle(album: Album): string {
+  return album.title || "Untitled Album";
+}
+
+function getAlbumPath(albumId: string): string {
+  return `/albums/${encodeURIComponent(albumId)}`;
 }
 
 export default function Home() {
@@ -45,10 +54,7 @@ export default function Home() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [redownloadFailedError, setRedownloadFailedError] = useState<
-    string | null
-  >(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [deletingAlbumId, setDeletingAlbumId] = useState<number | null>(null);
   const [redownloadingFailed, setRedownloadingFailed] = useState(false);
 
@@ -72,7 +78,6 @@ export default function Home() {
     return albums.reduce(
       (counts, album) => {
         counts[album.status] += 1;
-
         return counts;
       },
       {
@@ -86,24 +91,22 @@ export default function Home() {
 
   function getPreviewUrl(album: Album) {
     const baseUrl = apiBaseUrl || "";
-
-    return `${baseUrl}/api/albums/${encodeURIComponent(
-      album.album_id,
-    )}/pages/1/image`;
+    return `${baseUrl}/api${getAlbumPath(album.album_id)}/pages/1/image`;
   }
 
-  /**
-   * Position the preview around the mouse/touch location.
-   *
-   * Desktop:
-   * - Uses the existing 240x330 preview dimensions.
-   * - Preview follows the mouse.
-   *
-   * Mobile:
-   * - Uses the smaller mobile preview dimensions.
-   * - Preview follows the most recent screen tap.
-   * - If there is not enough room below the tap, it moves above it.
-   */
+  function resetPreview() {
+    setHoveredAlbum(null);
+    setPreviewLoading(false);
+    setPreviewError(false);
+  }
+
+  function showPreview(album: Album, clientX: number, clientY: number) {
+    setHoveredAlbum(album);
+    setPreviewLoading(true);
+    setPreviewError(false);
+    updatePreviewPosition(clientX, clientY);
+  }
+
   function updatePreviewPosition(clientX: number, clientY: number) {
     const isMobile = window.innerWidth <= 600;
 
@@ -136,73 +139,40 @@ export default function Home() {
     event: React.MouseEvent<HTMLTableRowElement>,
   ) {
     if (album.page_count <= 0) {
-      setHoveredAlbum(null);
-      setPreviewLoading(false);
-      setPreviewError(false);
-
+      resetPreview();
       return;
     }
-
-    setHoveredAlbum(album);
-    setPreviewLoading(true);
-    setPreviewError(false);
-
-    updatePreviewPosition(event.clientX, event.clientY);
+    showPreview(album, event.clientX, event.clientY);
   }
 
   function handleRowMouseMove(event: React.MouseEvent<HTMLTableRowElement>) {
-    if (!hoveredAlbum) {
-      return;
-    }
-
+    if (!hoveredAlbum) return;
     updatePreviewPosition(event.clientX, event.clientY);
   }
 
-  /**
-   * Mobile touch handling.
-   *
-   * The preview follows the LAST place the user tapped.
-   * This intentionally does not use a fixed bottom position.
-   */
   function handleRowTouchStart(
     album: Album,
     event: React.TouchEvent<HTMLTableRowElement>,
   ) {
     if (album.page_count <= 0) {
-      setHoveredAlbum(null);
-      setPreviewLoading(false);
-      setPreviewError(false);
-
+      resetPreview();
       return;
     }
-
     const touch = event.touches[0];
-
-    if (!touch) {
-      return;
-    }
-
-    setHoveredAlbum(album);
-    setPreviewLoading(true);
-    setPreviewError(false);
-
-    updatePreviewPosition(touch.clientX, touch.clientY);
+    if (!touch) return;
+    showPreview(album, touch.clientX, touch.clientY);
   }
 
   function handleRowMouseLeave() {
-    /*
-     * Do not clear the preview on mobile.
-     *
-     * Mouse leave is only relevant to desktop hover behavior.
-     * Mobile touch does not rely on mouseleave.
-     */
-    if (window.innerWidth <= 600) {
-      return;
-    }
+    if (window.innerWidth <= 600) return;
+    resetPreview();
+  }
 
-    setHoveredAlbum(null);
-    setPreviewLoading(false);
-    setPreviewError(false);
+  function handlePageTouchStart(event: React.TouchEvent<HTMLElement>) {
+    if (window.innerWidth > 600) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("table")) return;
+    resetPreview();
   }
 
   async function loadAlbums(isBackgroundPolling: boolean) {
@@ -211,30 +181,18 @@ export default function Home() {
         setLoading(true);
         setError(null);
       }
-
       const response = await apiFetch("/albums");
-
       if (!response.ok) {
-        if (isBackgroundPolling) {
-          return;
-        }
-
+        if (isBackgroundPolling) return;
         throw new Error(`Failed to fetch albums (${response.status})`);
       }
-
       const result: AlbumsResponse = await response.json();
-
       setAlbums(result.data);
     } catch (err) {
-      if (isBackgroundPolling) {
-        return;
-      }
-
+      if (isBackgroundPolling) return;
       setError(err instanceof Error ? err.message : "Failed to load albums.");
     } finally {
-      if (!isBackgroundPolling) {
-        setLoading(false);
-      }
+      if (!isBackgroundPolling) setLoading(false);
     }
   }
 
@@ -244,7 +202,6 @@ export default function Home() {
 
   useEffect(() => {
     const urlSearch = searchParams.get("search");
-
     if (urlSearch !== null) {
       setSearch(urlSearch);
     }
@@ -274,8 +231,8 @@ export default function Home() {
    * Poll while at least one album is queued or downloading.
    */
   useEffect(() => {
-    const hasActiveDownloads = albums.some(
-      (album) => album.status === "queued" || album.status === "downloading",
+    const hasActiveDownloads = albums.some((album) =>
+      ["queued", "downloading"].includes(album.status),
     );
 
     if (!hasActiveDownloads) {
@@ -291,28 +248,26 @@ export default function Home() {
     };
   }, [albums]);
 
-  /*
-   * Search + sorting.
-   *
-   * Search only checks:
-   * - database ID
-   * - album ID
-   * - title
-   *
-   * Status is deliberately excluded.
-   */
   const filteredAndSortedAlbums = useMemo(() => {
-    const searchTerm = search.trim().toLowerCase();
+    const searchTerms = search
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
 
     const filtered = albums.filter((album) => {
       const matchesStatus =
         statusFilter === "all" || album.status === statusFilter;
 
-      const matchesSearch =
-        !searchTerm ||
-        String(album.id).toLowerCase().includes(searchTerm) ||
-        album.album_id.toLowerCase().includes(searchTerm) ||
-        (album.title ?? "").toLowerCase().includes(searchTerm);
+      const searchableFields = [
+        String(album.id),
+        album.album_id,
+        album.title ?? "",
+      ].map((field) => field.toLowerCase());
+
+      const matchesSearch = searchTerms.every((term) =>
+        searchableFields.some((field) => field.includes(term)),
+      );
 
       return matchesStatus && matchesSearch;
     });
@@ -424,8 +379,7 @@ export default function Home() {
     }
 
     try {
-      setRedownloadFailedError(null);
-      setDeleteError(null);
+      setActionError(null);
       setRedownloadingFailed(true);
 
       const response = await apiFetch("/albums/redownload-failed", {
@@ -444,9 +398,9 @@ export default function Home() {
       await refreshAlbums();
     } catch (err) {
       if (err instanceof Error) {
-        setRedownloadFailedError(err.message);
+        setActionError(err.message);
       } else {
-        setRedownloadFailedError("Failed to redownload failed albums.");
+        setActionError("Failed to redownload failed albums.");
       }
     } finally {
       setRedownloadingFailed(false);
@@ -463,7 +417,7 @@ export default function Home() {
     }
 
     try {
-      setDeleteError(null);
+      setActionError(null);
       setDeletingAlbumId(album.id);
 
       const response = await apiFetch(`/albums/${album.album_id}`, {
@@ -484,9 +438,9 @@ export default function Home() {
       );
     } catch (err) {
       if (err instanceof Error) {
-        setDeleteError(err.message);
+        setActionError(err.message);
       } else {
-        setDeleteError("Failed to delete album.");
+        setActionError("Failed to delete album.");
       }
     } finally {
       setDeletingAlbumId(null);
@@ -494,7 +448,7 @@ export default function Home() {
   }
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} onTouchStart={handlePageTouchStart}>
       <div className={styles.container}>
         <header className={styles.header}>
           <div>
@@ -578,64 +532,32 @@ export default function Home() {
                 </span>
 
                 <div className={styles.statusFilters}>
-                  <button
-                    type="button"
-                    className={`${styles.statusFilterButton} ${
-                      statusFilter === "all" ? styles.statusFilterActive : ""
-                    }`}
-                    onClick={() => setStatusFilter("all")}
-                  >
-                    All
-                    <span>{albums.length}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`${styles.statusFilterButton} ${
-                      statusFilter === "queued" ? styles.statusFilterActive : ""
-                    }`}
-                    onClick={() => setStatusFilter("queued")}
-                  >
-                    Queued
-                    <span>{statusCounts.queued}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`${styles.statusFilterButton} ${
-                      statusFilter === "downloading"
-                        ? styles.statusFilterActive
-                        : ""
-                    }`}
-                    onClick={() => setStatusFilter("downloading")}
-                  >
-                    Downloading
-                    <span>{statusCounts.downloading}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`${styles.statusFilterButton} ${
-                      statusFilter === "completed"
-                        ? styles.statusFilterActive
-                        : ""
-                    }`}
-                    onClick={() => setStatusFilter("completed")}
-                  >
-                    Completed
-                    <span>{statusCounts.completed}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`${styles.statusFilterButton} ${
-                      statusFilter === "failed" ? styles.statusFilterActive : ""
-                    }`}
-                    onClick={() => setStatusFilter("failed")}
-                  >
-                    Failed
-                    <span>{statusCounts.failed}</span>
-                  </button>
+                  {[
+                    {
+                      value: "all" as const,
+                      label: "All",
+                      count: albums.length,
+                    },
+                    ...albumStatuses.map((status) => ({
+                      value: status,
+                      label: statusLabels[status],
+                      count: statusCounts[status],
+                    })),
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`${styles.statusFilterButton} ${
+                        statusFilter === option.value
+                          ? styles.statusFilterActive
+                          : ""
+                      }`}
+                      onClick={() => setStatusFilter(option.value)}
+                    >
+                      {option.label}
+                      <span>{option.count}</span>
+                    </button>
+                  ))}
                 </div>
 
                 <div className={styles.searchWrapper}>
@@ -662,11 +584,7 @@ export default function Home() {
               </div>
             </div>
 
-            {(deleteError || redownloadFailedError) && (
-              <p className={styles.inlineError}>
-                {deleteError ?? redownloadFailedError}
-              </p>
-            )}
+            {actionError && <p className={styles.inlineError}>{actionError}</p>}
 
             {filteredAndSortedAlbums.length === 0 ? (
               <div className={styles.emptySearch}>
@@ -745,10 +663,10 @@ export default function Home() {
 
                         <td className={styles.titleCell}>
                           <Link
-                            href={`/albums/${album.album_id}`}
+                            href={getAlbumPath(album.album_id)}
                             className={styles.albumLink}
                           >
-                            {album.title || "Untitled Album"}
+                            {getAlbumTitle(album)}
                           </Link>
                         </td>
 
@@ -762,14 +680,14 @@ export default function Home() {
 
                         <td className={styles.actionsCell}>
                           <Link
-                            href={`/albums/${album.album_id}`}
+                            href={getAlbumPath(album.album_id)}
                             className={styles.viewButton}
                           >
                             Open
                           </Link>
 
                           <Link
-                            href={`/albums/${album.album_id}/edit`}
+                            href={`${getAlbumPath(album.album_id)}/edit`}
                             className={styles.editButton}
                           >
                             Edit
@@ -838,7 +756,7 @@ export default function Home() {
 
           <div className={styles.previewInfo}>
             <span className={styles.previewTitle}>
-              {hoveredAlbum.title || "Untitled Album"}
+              {getAlbumTitle(hoveredAlbum)}
             </span>
 
             <span className={styles.previewPages}>
@@ -889,18 +807,11 @@ function SortableHeader({
 }
 
 function StatusBadge({ status }: { status: AlbumStatus }) {
-  const labels: Record<AlbumStatus, string> = {
-    queued: "Queued",
-    downloading: "Downloading",
-    completed: "Completed",
-    failed: "Failed",
-  };
-
   return (
     <span className={`${styles.status} ${styles[`status-${status}`]}`}>
       <span className={styles.statusDot} />
 
-      {labels[status]}
+      {statusLabels[status]}
     </span>
   );
 }
