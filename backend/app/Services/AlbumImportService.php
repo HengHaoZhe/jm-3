@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Album;
-use App\Models\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use RuntimeException;
@@ -57,7 +56,7 @@ class AlbumImportService
     $insertStart = microtime(true);
     $chunkCount = 0;
 
-    DB::transaction(function () use ($album, $pageRows, $albumDirectory, &$chunkCount) {
+    DB::transaction(function () use ($album, $pageRows, &$chunkCount) {
       // Remove any existing page records.
       $album->pages()->delete();
 

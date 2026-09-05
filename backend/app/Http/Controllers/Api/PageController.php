@@ -33,7 +33,7 @@ class PageController extends Controller
 
   public function albumPages(string $album_id)
   {
-    $pages = Page::where('album_id', $album_id)->orderBy('sort_order')->paginate(50);
+    $pages = Page::where('album_id', $album_id)->paginate(50);
 
     return PageResource::collection($pages);
   }

@@ -35,14 +35,10 @@ class AlbumController extends Controller
     $albumId = $request->album_id;
 
     $dbStart = microtime(true);
-    File::ensureDirectoryExists(
-      config('manga.storage_path') . DIRECTORY_SEPARATOR . $albumId
-    );
-
     $album = Album::create([
       'album_id' => $albumId,
       'title' => '',
-      'status' => 'queued',
+      'status' => Album::STATUS_QUEUED,
     ]);
     $albumDbInsertTime = microtime(true) - $dbStart;
 
@@ -70,9 +66,7 @@ class AlbumController extends Controller
       100
     );
 
-    $pages = $album->pages()
-      ->orderBy('sort_order', 'asc')
-      ->paginate($perPage);
+    $pages = $album->pages()->paginate($perPage);
 
     $album->setRelation('pages', $pages->getCollection());
 
@@ -155,7 +149,7 @@ class AlbumController extends Controller
       $albumRows = array_map(fn($id) => [
         'album_id' => $id,
         'title' => '',
-        'status' => 'queued',
+        'status' => Album::STATUS_QUEUED,
         'page_count' => 0,
         'created_at' => $timestamp,
         'updated_at' => $timestamp,
@@ -205,7 +199,7 @@ class AlbumController extends Controller
 
   public function redownload(Album $album)
   {
-    if (in_array($album->status, ['queued', 'downloading'], true)) {
+    if (in_array($album->status, [Album::STATUS_QUEUED, Album::STATUS_DOWNLOADING], true)) {
       return response()->json([
         'message' => 'Album is already queued or downloading.',
       ], 422);
@@ -220,7 +214,7 @@ class AlbumController extends Controller
 
   public function redownloadFailed()
   {
-    $failedAlbums = Album::where('status', 'failed')->get();
+    $failedAlbums = Album::where('status', Album::STATUS_FAILED)->get();
 
     if ($failedAlbums->isEmpty()) {
       return response()->json([
@@ -257,7 +251,7 @@ class AlbumController extends Controller
     }
 
     $album->update([
-      'status' => 'completed',
+      'status' => Album::STATUS_COMPLETED,
     ]);
 
     return new AlbumResource(
@@ -275,16 +269,12 @@ class AlbumController extends Controller
    */
   private function requeueAlbum(Album $album): void
   {
-    File::ensureDirectoryExists(
-      config('manga.storage_path') . DIRECTORY_SEPARATOR . $album->album_id
-    );
-
     DB::transaction(function () use ($album) {
       // Clear previously imported pages so the next run rebuilds them.
       $album->pages()->delete();
 
       $album->update([
-        'status' => 'queued',
+        'status' => Album::STATUS_QUEUED,
         'page_count' => 0,
       ]);
     });

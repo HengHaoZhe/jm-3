@@ -47,7 +47,7 @@ class DownloadAlbumJob implements ShouldQueue
     try {
       $statusUpdateStart = microtime(true);
       $this->album->update([
-        'status' => 'downloading',
+        'status' => Album::STATUS_DOWNLOADING,
       ]);
       logger()->info('ALBUM JOB: status set to downloading', [
         'album_id' => $albumId,
@@ -64,7 +64,7 @@ class DownloadAlbumJob implements ShouldQueue
 
       $completeStart = microtime(true);
       $this->album->update([
-        'status' => 'completed',
+        'status' => Album::STATUS_COMPLETED,
       ]);
       $completeUpdateTime = microtime(true) - $completeStart;
 
@@ -78,7 +78,7 @@ class DownloadAlbumJob implements ShouldQueue
     } catch (Throwable $e) {
       $failureStart = microtime(true);
       $this->album->update([
-        'status' => 'failed',
+        'status' => Album::STATUS_FAILED,
       ]);
       logger()->error('ALBUM JOB: failed', [
         'album_id' => $albumId,

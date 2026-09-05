@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Album;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -29,10 +30,10 @@ class UpdateAlbumRequest extends FormRequest
       'status' => [
         'required',
         Rule::in([
-          'queued',
-          'downloading',
-          'completed',
-          'failed',
+          Album::STATUS_QUEUED,
+          Album::STATUS_DOWNLOADING,
+          Album::STATUS_COMPLETED,
+          Album::STATUS_FAILED,
         ]),
       ],
     ];

@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Album extends Model
 {
+  public const STATUS_QUEUED = 'queued';
+  public const STATUS_DOWNLOADING = 'downloading';
+  public const STATUS_COMPLETED = 'completed';
+  public const STATUS_FAILED = 'failed';
+
   protected $fillable = [
     'album_id',
     'title',

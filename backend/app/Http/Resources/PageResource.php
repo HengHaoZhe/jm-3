@@ -28,14 +28,5 @@ class PageResource extends JsonResource
       'file_path' => $this->file_path,
       'url' => $imageUrl,
     ];
-    // return [
-    //   'id' => $this->id,
-    //   'sort_order' => $this->sort_order,
-    //   'file_path' => $this->file_path,
-    //   'url' => route('pages.image', [
-    //     'album_id' => $this->album_id,
-    //     'sort_order' => $this->sort_order,
-    //   ]),
-    // ];
   }
 }

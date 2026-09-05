@@ -102,8 +102,6 @@ class MangaDownloadService
 
     $destination = $this->mangaDirectory . DIRECTORY_SEPARATOR . $albumId;
 
-    File::ensureDirectoryExists($destination);
-
     if (count($downloadDirectories) === 1) {
       $this->moveSingleFolderContents(reset($downloadDirectories), $destination);
     } else {
