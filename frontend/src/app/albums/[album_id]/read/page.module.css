@@ -1,120 +1,274 @@
 .reader {
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  margin: 0;
+  padding: 0;
+
   background: #111;
   color: #fff;
+
+  overflow-x: hidden;
+  overflow-y: auto;
 }
+
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
 
 .toolbar {
   position: relative;
   z-index: 100;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
+
+  width: 100%;
   min-height: 58px;
+  box-sizing: border-box;
+
   padding: 8px 20px;
+
   border-bottom: 1px solid #2a2a2a;
   background: rgba(17, 17, 17, 0.96);
+
   backdrop-filter: blur(10px);
 }
 
 .toolbarLeft {
   position: absolute;
   left: 20px;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  min-width: 0;
-}
 
-.toolbarCenter {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
 }
 
 .toolbarRight {
   position: absolute;
   right: 20px;
+
   display: flex;
   align-items: center;
 }
 
 .toolbarButton {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+
+  border: 0;
+  background: transparent;
+
   color: #ddd;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 14px;
+
+  cursor: pointer;
+  text-decoration: none;
 }
 
 .toolbarButton:hover {
   color: #fff;
 }
 
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  border: 0;
+  background: transparent;
+
+  color: #ddd;
+  font-size: 14px;
+
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.backButton:hover {
+  color: #fff;
+}
+
 .backText {
-  font-size: 13px;
-  font-weight: 500;
+  display: inline;
 }
 
 .title {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
   min-width: 0;
+
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .title span {
+  display: block;
+
+  max-width: min(50vw, 600px);
+
   overflow: hidden;
-  color: #eee;
-  font-size: 14px;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .title small {
-  margin-top: 2px;
-  color: #777;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  display: none;
 }
 
-.navigation {
-  display: flex;
+/* =========================================================
+   MODE BUTTON
+   ========================================================= */
+
+.modeButton {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+
+  gap: 6px;
+
+  min-width: 36px;
+  height: 34px;
+
+  padding: 0 10px;
+
+  border: 1px solid #333;
+  border-radius: 6px;
+
+  background: #1c1c1c;
+  color: #ddd;
+
+  cursor: pointer;
+}
+
+.modeButton:hover {
+  background: #262626;
+  color: #fff;
+}
+
+.modeButtonActive {
+  background: #292929;
+  color: #fff;
+}
+
+.modeText {
+  font-size: 12px;
+}
+
+.modeIcon {
+  line-height: 1;
+}
+
+/* =========================================================
+   PROGRESS
+   ========================================================= */
+
+.progressTrack {
+  position: relative;
+  z-index: 90;
+
+  width: 100%;
+  height: 3px;
+
+  background: #222;
+}
+
+.progressBar {
+  height: 100%;
+
+  background: #fff;
+
+  transition: width 0.2s ease;
+}
+
+/* =========================================================
+   READER BODY
+   ========================================================= */
+
+.readerBody {
+  display: flex;
+  flex-direction: column;
+
+  width: 100%;
+  min-width: 0;
+
+  margin: 0;
+  padding: 0;
+
+  /*
+   * IMPORTANT:
+   * Do not use flex: 1 here.
+   * The reader body must grow naturally so the
+   * entire document can scroll.
+   */
+}
+
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+
+.bodyNavigation {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
   gap: 8px;
+
+  width: 100%;
+  min-height: 50px;
+
+  box-sizing: border-box;
+
+  padding: 8px 20px;
+
+  background: rgba(17, 17, 17, 0.96);
 }
 
 .navButton {
-  width: 34px;
-  height: 34px;
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 36px;
+  height: 36px;
+
+  padding: 0;
+
   border: 1px solid #333;
   border-radius: 6px;
-  background: #181818;
+
+  background: #1c1c1c;
   color: #ddd;
+
   cursor: pointer;
-  font-size: 18px;
 }
 
 .navButton:hover:not(:disabled) {
   background: #292929;
+  color: #fff;
 }
 
 .navButton:disabled {
-  cursor: not-allowed;
   opacity: 0.35;
+  cursor: default;
 }
 
 .pageJump {
   display: flex;
+
   align-items: center;
-  gap: 5px;
+
+  gap: 6px;
+
   color: #aaa;
+
   font-family: var(--font-geist-mono), monospace;
   font-size: 12px;
 }
@@ -122,96 +276,137 @@
 .pageJump input {
   width: 42px;
   height: 32px;
+
+  box-sizing: border-box;
+
+  padding: 0 6px;
+
   border: 1px solid #333;
-  border-radius: 6px;
-  outline: none;
-  background: #181818;
+  border-radius: 5px;
+
+  background: #1c1c1c;
   color: #fff;
+
   text-align: center;
-  font: inherit;
+  outline: none;
 }
 
 .pageJump input:focus {
   border-color: #666;
 }
 
-.modeButton {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 11px;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #181818;
-  color: #aaa;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.modeButton:hover {
-  background: #292929;
-  color: #fff;
-}
-
-.modeButtonActive {
-  border-color: #555;
-  background: #292929;
-  color: #fff;
-}
-
-.modeIcon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.modeText {
-  white-space: nowrap;
-}
-
-.progressTrack {
-  position: relative;
-  z-index: 101;
-  flex: 0 0 3px;
-  width: 100%;
-  height: 3px;
-  background: #333;
-}
-
-.progressBar {
-  height: 100%;
-  background: #fff;
-  transition: width 0.2s ease;
-}
-
-/*
-
-* Single-page reader
-  */
+/* =========================================================
+   SINGLE PAGE READER
+   ========================================================= */
 
 .singlePage {
   position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
+
   display: flex;
+
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  padding: 12px;
+
+  /*
+   * The image gets a full viewport-sized area.
+   * This is intentionally NOT flex: 1.
+   */
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  margin: 0;
+  padding: 0;
+
+  overflow: visible;
+
+  background: #000;
+
+  box-sizing: border-box;
 }
+
+/* =========================================================
+   SINGLE PAGE IMAGE
+   ========================================================= */
+
+.singlePageItem {
+  position: relative;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100%;
+
+  min-width: 0;
+  min-height: 0;
+
+  margin: 0;
+  padding: 0;
+
+  overflow: visible;
+
+  line-height: 0;
+}
+
+.singlePageItem img {
+  display: block;
+
+  /*
+   * Do NOT force width/height to 100%.
+   * The image keeps its original aspect ratio.
+   */
+  width: auto;
+  height: auto;
+
+  /*
+   * The image can use either the viewport width
+   * or viewport height, whichever is limiting.
+   */
+  max-width: 100vw;
+  max-width: 100dvw;
+
+  max-height: 100vh;
+  max-height: 100dvh;
+
+  object-fit: contain;
+  object-position: center;
+
+  margin: 0;
+  padding: 0;
+
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* =========================================================
+   SINGLE PAGE NAVIGATION OVERLAY
+   ========================================================= */
 
 .pageNavigation {
   position: absolute;
+
   top: 0;
   bottom: 0;
+
   width: 50%;
+
   margin: 0;
   padding: 0;
+
   border: 0;
+
   background: transparent;
+
   cursor: pointer;
+
   z-index: 10;
 
   -webkit-tap-highlight-color: transparent;
@@ -241,245 +436,163 @@
   cursor: default;
 }
 
-.singlePageItem {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 0;
-}
-
-.singlePageItem img {
-  display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  margin: 0 auto;
-}
+/* =========================================================
+   PAGE NUMBER
+   ========================================================= */
 
 .singlePageNumber {
   position: absolute;
+
   top: 8px;
   left: 8px;
-  z-index: 2;
+
+  z-index: 20;
+
   padding: 5px 8px;
+
   border-radius: 4px;
+
   background: rgba(0, 0, 0, 0.65);
   color: #ddd;
+
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   line-height: normal;
+
+  pointer-events: none;
 }
 
-/*
-
-* Vertical reader
-  */
+/* =========================================================
+   VERTICAL READER
+   ========================================================= */
 
 .verticalReader {
-  flex: 1 1 auto;
-  min-height: 0;
+  width: 100%;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
+
+  margin: 0;
+  padding: 0;
+
+  overflow: visible;
+
+  background: #111;
 }
 
 .pages {
   display: flex;
+
   flex-direction: column;
   align-items: center;
+
   width: 100%;
-  gap: 0;
+
+  margin: 0;
+  padding: 0;
 }
 
 .verticalPage {
   position: relative;
+
   width: 100%;
-  max-width: 1000px;
+  max-width: 1200px;
+
   margin: 0;
+  padding: 0;
+
   line-height: 0;
-  cursor: pointer;
-  scroll-margin-top: 70px;
 }
 
 .verticalPage img {
   display: block;
+
   width: 100%;
   height: auto;
-  background: #222;
-}
 
-.verticalPageActive {
-  outline: none;
+  margin: 0;
+  padding: 0;
 }
 
 .pageNumber {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 2;
+
+  top: 8px;
+  left: 8px;
+
+  z-index: 10;
+
   padding: 5px 8px;
+
   border-radius: 4px;
+
   background: rgba(0, 0, 0, 0.65);
   color: #ddd;
+
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   line-height: normal;
+
   pointer-events: none;
 }
 
-/*
+/* =========================================================
+   LOADING / ERROR
+   ========================================================= */
 
-* Footer
-  */
-
-.footer {
+.loading,
+.error {
   display: flex;
+
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  gap: 20px;
-  min-height: 70px;
-  padding: 12px 20px;
-  color: #777;
-  font-size: 13px;
+
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  box-sizing: border-box;
+
+  padding: 20px;
+
+  color: #aaa;
+
+  text-align: center;
 }
 
-.footerButton {
-  min-width: 110px;
-  padding: 9px 14px;
-  border: 1px solid #333;
-  border-radius: 8px;
-  background: transparent;
-  color: #ddd;
-  cursor: pointer;
+.error {
+  color: #f88;
 }
-
-.footerButton:hover:not(:disabled) {
-  background: #222;
-}
-
-.footerButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-
-/*
-
-* Loading / error states
-  */
 
 .message {
   display: flex;
+
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 100vh;
   min-height: 100dvh;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 24px;
+
+  padding: 20px;
+
+  box-sizing: border-box;
+
   text-align: center;
 }
 
-.message h1 {
-  margin: 0;
-  font-size: 24px;
-}
-
-.message p {
-  margin: 0;
-  color: #aaa;
-}
-
-.backButton {
-  margin-top: 10px;
-  padding: 10px 16px;
-  border-radius: 8px;
-  background: #fff;
-  color: #111;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.imageLoading {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  min-height: 240px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: #888;
-  font-size: 13px;
-}
-
-.loadingSpinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid #333;
-  border-top-color: #aaa;
-  border-radius: 50%;
-  animation: readerSpin 0.8s linear infinite;
-}
-
-@keyframes readerSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.imageError {
-  display: flex;
-  width: 100%;
-  min-height: 240px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: #aaa;
-  text-align: center;
-}
-
-.imageError strong {
-  color: #ddd;
-  font-size: 15px;
-}
-
-.imageError span {
-  font-size: 12px;
-}
-
-.retryButton {
-  margin-top: 8px;
-  padding: 8px 14px;
-  border: 1px solid #444;
-  border-radius: 6px;
-  background: #181818;
-  color: #ddd;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.retryButton:hover {
-  background: #292929;
-}
+/* =========================================================
+   MOBILE
+   ========================================================= */
 
 @media (max-width: 600px) {
   .toolbar {
+    min-height: 52px;
+
     padding: 8px 10px;
   }
 
   .toolbarLeft {
     left: 10px;
+
     gap: 10px;
   }
 
@@ -495,22 +608,14 @@
     max-width: 100px;
   }
 
-  .navigation {
-    gap: 4px;
-  }
-
   .navButton {
     width: 32px;
     height: 32px;
   }
 
-  .pageJump input {
-    width: 36px;
-  }
-
   .modeButton {
     width: 34px;
-    justify-content: center;
+
     padding: 0;
   }
 
@@ -518,8 +623,41 @@
     display: none;
   }
 
+  /*
+   * Keep the single page at full viewport height
+   * even on mobile.
+   */
   .singlePage {
-    padding: 6px;
+    width: 100%;
+
+    height: 100vh;
+    height: 100dvh;
+
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    padding: 0;
+  }
+
+  .singlePageItem {
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .singlePageItem img {
+    width: auto !important;
+    height: auto !important;
+
+    max-width: 100vw;
+    max-width: 100dvw;
+
+    max-height: 100vh;
+    max-height: 100dvh;
+
+    object-fit: contain;
   }
 
   .singlePageNumber {
@@ -536,15 +674,49 @@
     left: 6px;
   }
 
-  .footer {
-    min-height: 64px;
-    flex-wrap: wrap;
-    gap: 10px;
+  .bodyNavigation {
+    min-height: 48px;
+
+    gap: 4px;
+
     padding: 8px 10px;
   }
 
-  .footerButton {
-    min-width: 90px;
-    padding: 8px 10px;
+  .bodyNavigation .navButton {
+    width: 32px;
+    height: 32px;
+  }
+
+  .bodyNavigation .pageJump input {
+    width: 36px;
+  }
+
+  .bodyNavigation .pageJump {
+    gap: 4px;
+  }
+}
+
+/* =========================================================
+   SHORT / LANDSCAPE SCREENS
+   ========================================================= */
+
+@media (max-height: 500px) {
+  .toolbar {
+    min-height: 46px;
+
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .bodyNavigation {
+    min-height: 42px;
+
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .navButton {
+    width: 30px;
+    height: 30px;
   }
 }

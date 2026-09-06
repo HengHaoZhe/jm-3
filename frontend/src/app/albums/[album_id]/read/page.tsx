@@ -1,40 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import styles from "./page.module.css";
-import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
+import { fetchAlbum, getApiImageUrl, getAlbumPath } from "@/app/lib/api";
+import { Album, AlbumResponse } from "@/app/lib/types";
+import { useApiBaseUrl } from "@/app/lib/useApiBaseUrl";
 
-type AlbumStatus = "queued" | "downloading" | "completed" | "failed";
 type ReaderMode = "single" | "vertical";
 
 const PRELOADED_PAGE_RADIUS = 4;
-
-interface Page {
-  sort_order: number;
-  file_path: string;
-  url: string;
-}
-
-interface Album {
-  album_id: string;
-  title: string;
-  status: AlbumStatus;
-  page_count: number;
-  pages: Page[];
-  created_at: string;
-}
-
-interface AlbumResponse {
-  data: Album;
-}
-
-function getImageUrl(apiUrl: string, url: string) {
-  const parsedUrl = new URL(url);
-
-  return `${apiUrl}${parsedUrl.pathname}${parsedUrl.search}`;
-}
 
 function getProgressKey(albumId: string) {
   return `jm-next-reading-progress:${albumId}`;
@@ -42,6 +18,16 @@ function getProgressKey(albumId: string) {
 
 function getReaderModeKey(albumId: string) {
   return `jm-next-reader-mode:${albumId}`;
+}
+
+function isValidPage(pageNumber: number, pageCount: number) {
+  return (
+    Number.isInteger(pageNumber) && pageNumber >= 1 && pageNumber <= pageCount
+  );
+}
+
+function clampPage(pageNumber: number, pageCount: number) {
+  return Math.min(Math.max(pageNumber, 1), pageCount);
 }
 
 export default function ReaderPage() {
@@ -52,7 +38,7 @@ export default function ReaderPage() {
   const pageParam = searchParams.get("page");
 
   const [album, setAlbum] = useState<Album | null>(null);
-  const [apiUrl, setApiUrl] = useState<string | null>(null);
+  const { apiUrl, error: apiError } = useApiBaseUrl();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -63,31 +49,7 @@ export default function ReaderPage() {
   const [error, setError] = useState<string | null>(null);
   const [progressRestored, setProgressRestored] = useState(false);
   const [modeRestored, setModeRestored] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function resolveApiUrl() {
-      try {
-        const url = await getApiBaseUrl();
-
-        if (!cancelled) {
-          setApiUrl(url);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Failed to determine API server.");
-          setLoading(false);
-        }
-      }
-    }
-
-    resolveApiUrl();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const activePageRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!albumId) {
@@ -96,26 +58,18 @@ export default function ReaderPage() {
 
     let cancelled = false;
 
-    async function fetchAlbum() {
+    async function loadAlbum() {
       try {
         setLoading(true);
         setError(null);
-
-        const response = await apiFetch(`/albums/${albumId}/reader`);
 
         if (cancelled) {
           return;
         }
 
-        if (response.status === 404) {
-          throw new Error("Album not found.");
-        }
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch album (${response.status}).`);
-        }
-
-        const result: AlbumResponse = await response.json();
+        const result = await fetchAlbum<AlbumResponse>(
+          `/albums/${albumId}/reader`,
+        );
 
         if (!cancelled) {
           setAlbum(result.data);
@@ -137,14 +91,13 @@ export default function ReaderPage() {
       }
     }
 
-    fetchAlbum();
+    loadAlbum();
 
     return () => {
       cancelled = true;
     };
   }, [albumId]);
 
-  // Refactored duplicate restoration logic
   useEffect(() => {
     if (!album) {
       return;
@@ -155,11 +108,7 @@ export default function ReaderPage() {
     if (pageParam !== null) {
       const requestedPage = Number(pageParam);
 
-      if (
-        Number.isInteger(requestedPage) &&
-        requestedPage >= 1 &&
-        requestedPage <= album.pages.length
-      ) {
+      if (isValidPage(requestedPage, album.pages.length)) {
         restoredPage = requestedPage;
       }
     }
@@ -170,11 +119,7 @@ export default function ReaderPage() {
       if (savedPage) {
         const pageNumber = Number(savedPage);
 
-        if (
-          Number.isInteger(pageNumber) &&
-          pageNumber >= 1 &&
-          pageNumber <= album.pages.length
-        ) {
+        if (isValidPage(pageNumber, album.pages.length)) {
           restoredPage = pageNumber;
         }
       }
@@ -196,7 +141,6 @@ export default function ReaderPage() {
     setPageInput(String(currentPage));
   }, [currentPage]);
 
-  // Restore reader mode
   useEffect(() => {
     if (!album) {
       return;
@@ -207,10 +151,10 @@ export default function ReaderPage() {
     if (savedMode === "single" || savedMode === "vertical") {
       setReaderMode(savedMode);
     }
+
     setModeRestored(true);
   }, [album]);
 
-  // Persist reader mode safely without overwriting initial state
   useEffect(() => {
     if (!album || !modeRestored) {
       return;
@@ -225,6 +169,7 @@ export default function ReaderPage() {
     }
 
     const firstPage = Math.max(currentPage - 1 - PRELOADED_PAGE_RADIUS, 0);
+
     const lastPage = Math.min(
       currentPage - 1 + PRELOADED_PAGE_RADIUS + 1,
       album.pages.length,
@@ -232,9 +177,30 @@ export default function ReaderPage() {
 
     album.pages.slice(firstPage, lastPage).forEach((preloadedPage) => {
       const image = new Image();
-      image.src = getImageUrl(apiUrl, preloadedPage.url);
+      image.src = getApiImageUrl(apiUrl, preloadedPage.url);
     });
   }, [album, apiUrl, currentPage, readerMode]);
+
+  useEffect(() => {
+    if (!album || !progressRestored) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollToActivePage();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [album, currentPage, progressRestored, readerMode]);
+
+  function scrollToActivePage() {
+    activePageRef.current?.scrollIntoView({
+      block: "start",
+      behavior: "auto",
+    });
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -272,12 +238,11 @@ export default function ReaderPage() {
       return;
     }
 
-    const page = Math.min(Math.max(pageNumber, 1), album.pages.length);
+    const page = clampPage(pageNumber, album.pages.length);
 
     setCurrentPage(page);
   }
 
-  // Simplified input submission logic relying on goToPage clamping
   function submitPageInput() {
     const pageNumber = Number(pageInput);
 
@@ -293,7 +258,7 @@ export default function ReaderPage() {
     setReaderMode((current) => (current === "single" ? "vertical" : "single"));
   }
 
-  if (loading) {
+  if (loading && !apiError) {
     return (
       <main className={styles.reader}>
         {" "}
@@ -302,15 +267,15 @@ export default function ReaderPage() {
     );
   }
 
-  if (error || !album) {
+  if (error || apiError || !album) {
     return (
       <main className={styles.reader}>
         {" "}
         <div className={styles.message}>
           {" "}
           <h1>Unable to open reader</h1>
-          <p>{error ?? "Album not found."}</p>
-          <Link href={`/albums/${albumId}`} className={styles.backButton}>
+          <p>{error ?? apiError ?? "Album not found."}</p>
+          <Link href={getAlbumPath(albumId)} className={styles.backButton}>
             ← Back to Album
           </Link>
         </div>
@@ -328,7 +293,7 @@ export default function ReaderPage() {
           <p>
             This album is currently <strong>{album.status}</strong>.
           </p>
-          <Link href={`/albums/${albumId}`} className={styles.backButton}>
+          <Link href={getAlbumPath(albumId)} className={styles.backButton}>
             ← Back to Album
           </Link>
         </div>
@@ -340,6 +305,8 @@ export default function ReaderPage() {
 
   const progress =
     album.pages.length > 0 ? (currentPage / album.pages.length) * 100 : 0;
+  const isFirstPage = currentPage === 1;
+  const isLastPage = currentPage === album.pages.length;
 
   return (
     <main className={styles.reader}>
@@ -347,77 +314,14 @@ export default function ReaderPage() {
       <header className={styles.toolbar}>
         {" "}
         <div className={styles.toolbarLeft}>
-          <Link href={`/albums/${albumId}`} className={styles.toolbarButton}>
+          {" "}
+          <Link href={getAlbumPath(albumId)} className={styles.toolbarButton}>
             ←<span className={styles.backText}>Back</span>{" "}
           </Link>
-
           <div className={styles.title}>
             <span>{album.title || `Album ${album.album_id}`}</span>
 
             <small>#{album.album_id}</small>
-          </div>
-        </div>
-        <div className={styles.toolbarCenter}>
-          <div className={styles.navigation}>
-            <button
-              type="button"
-              className={styles.navButton}
-              onClick={() => goToPage(1)}
-              disabled={currentPage === 1}
-              aria-label="First page"
-              title="First page"
-            >
-              «
-            </button>
-
-            <button
-              type="button"
-              className={styles.navButton}
-              onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
-              aria-label="Previous page"
-            >
-              ←
-            </button>
-
-            <form
-              className={styles.pageJump}
-              onSubmit={(event) => {
-                event.preventDefault();
-                submitPageInput();
-              }}
-            >
-              <input
-                value={pageInput}
-                onChange={(event) => setPageInput(event.target.value)}
-                onBlur={submitPageInput}
-                aria-label="Page number"
-                inputMode="numeric"
-              />
-
-              <span>/ {album.pages.length}</span>
-            </form>
-
-            <button
-              type="button"
-              className={styles.navButton}
-              onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === album.pages.length}
-              aria-label="Next page"
-            >
-              →
-            </button>
-
-            <button
-              type="button"
-              className={styles.navButton}
-              onClick={() => goToPage(album.pages.length)}
-              disabled={currentPage === album.pages.length}
-              aria-label="Last page"
-              title="Last page"
-            >
-              »
-            </button>
           </div>
         </div>
         <div className={styles.toolbarRight}>
@@ -447,22 +351,34 @@ export default function ReaderPage() {
           }}
         />
       </div>
-      {readerMode === "single" ? (
-        <>
+      <div className={styles.readerBody}>
+        <NavigationControls
+          currentPage={currentPage}
+          pageCount={album.pages.length}
+          pageInput={pageInput}
+          onPageInputChange={setPageInput}
+          onPageInputSubmit={submitPageInput}
+          onGoToPage={goToPage}
+          isFirstPage={isFirstPage}
+          isLastPage={isLastPage}
+        />
+
+        {readerMode === "single" ? (
           <div className={styles.singlePage}>
             <button
               type="button"
               className={`${styles.pageNavigation} ${styles.pageNavigationLeft}`}
               onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
+              disabled={isFirstPage}
               aria-label="Previous page"
             />
 
             {page && apiUrl && (
-              <figure className={styles.singlePageItem}>
+              <figure ref={activePageRef} className={styles.singlePageItem}>
                 <img
-                  src={getImageUrl(apiUrl, page.url)}
+                  src={getApiImageUrl(apiUrl, page.url)}
                   alt={`Page ${page.sort_order}`}
+                  onLoad={scrollToActivePage}
                 />
 
                 <div className={styles.singlePageNumber}>
@@ -475,80 +391,139 @@ export default function ReaderPage() {
               type="button"
               className={`${styles.pageNavigation} ${styles.pageNavigationRight}`}
               onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === album.pages.length}
+              disabled={isLastPage}
               aria-label="Next page"
             />
           </div>
+        ) : (
+          <div className={styles.verticalReader}>
+            <div className={styles.pages}>
+              {album.pages.map((readerPage, index) => (
+                <figure
+                  key={`${readerPage.file_path}-${index}`}
+                  ref={currentPage === index + 1 ? activePageRef : undefined}
+                  className={`${styles.verticalPage} ${
+                    currentPage === index + 1 ? styles.verticalPageActive : ""
+                  }`}
+                  onClick={() => goToPage(index + 1)}
+                >
+                  {apiUrl && (
+                    <img
+                      src={getApiImageUrl(apiUrl, readerPage.url)}
+                      alt={`Page ${readerPage.sort_order}`}
+                      loading={index < 2 ? "eager" : "lazy"}
+                      onLoad={
+                        currentPage === index + 1
+                          ? scrollToActivePage
+                          : undefined
+                      }
+                    />
+                  )}
 
-          <footer className={styles.footer}>
-            <button
-              type="button"
-              className={styles.footerButton}
-              onClick={() => goToPage(1)}
-              disabled={currentPage === 1}
-            >
-              First
-            </button>
-
-            <button
-              type="button"
-              className={styles.footerButton}
-              onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              ← Previous
-            </button>
-
-            <span>
-              Page {currentPage} of {album.pages.length}
-            </span>
-
-            <button
-              type="button"
-              className={styles.footerButton}
-              onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === album.pages.length}
-            >
-              Next →
-            </button>
-
-            <button
-              type="button"
-              className={styles.footerButton}
-              onClick={() => goToPage(album.pages.length)}
-              disabled={currentPage === album.pages.length}
-            >
-              Last
-            </button>
-          </footer>
-        </>
-      ) : (
-        <div className={styles.verticalReader}>
-          <div className={styles.pages}>
-            {album.pages.map((readerPage, index) => (
-              <figure
-                key={`${readerPage.file_path}-${index}`}
-                className={`${styles.verticalPage} ${
-                  currentPage === index + 1 ? styles.verticalPageActive : ""
-                }`}
-                onClick={() => goToPage(index + 1)}
-              >
-                {apiUrl && (
-                  <img
-                    src={getImageUrl(apiUrl, readerPage.url)}
-                    alt={`Page ${readerPage.sort_order}`}
-                    loading={index < 2 ? "eager" : "lazy"}
-                  />
-                )}
-
-                <div className={styles.pageNumber}>
-                  Page {readerPage.sort_order}
-                </div>
-              </figure>
-            ))}
+                  <div className={styles.pageNumber}>
+                    Page {readerPage.sort_order}
+                  </div>
+                </figure>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        <NavigationControls
+          currentPage={currentPage}
+          pageCount={album.pages.length}
+          pageInput={pageInput}
+          onPageInputChange={setPageInput}
+          onPageInputSubmit={submitPageInput}
+          onGoToPage={goToPage}
+          isFirstPage={isFirstPage}
+          isLastPage={isLastPage}
+        />
+      </div>
     </main>
+  );
+}
+
+function NavigationControls({
+  currentPage,
+  pageCount,
+  pageInput,
+  onPageInputChange,
+  onPageInputSubmit,
+  onGoToPage,
+  isFirstPage,
+  isLastPage,
+}: {
+  currentPage: number;
+  pageCount: number;
+  pageInput: string;
+  onPageInputChange: (value: string) => void;
+  onPageInputSubmit: () => void;
+  onGoToPage: (pageNumber: number) => void;
+  isFirstPage: boolean;
+  isLastPage: boolean;
+}) {
+  return (
+    <nav className={styles.bodyNavigation} aria-label="Page navigation">
+      <button
+        type="button"
+        className={styles.navButton}
+        onClick={() => onGoToPage(1)}
+        disabled={isFirstPage}
+        aria-label="First page"
+        title="First page"
+      >
+        «{" "}
+      </button>
+
+      <button
+        type="button"
+        className={styles.navButton}
+        onClick={() => onGoToPage(currentPage - 1)}
+        disabled={isFirstPage}
+        aria-label="Previous page"
+      >
+        ←
+      </button>
+
+      <form
+        className={styles.pageJump}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onPageInputSubmit();
+        }}
+      >
+        <input
+          value={pageInput}
+          onChange={(event) => onPageInputChange(event.target.value)}
+          onBlur={onPageInputSubmit}
+          aria-label="Page number"
+          inputMode="numeric"
+        />
+
+        <span>/ {pageCount}</span>
+      </form>
+
+      <button
+        type="button"
+        className={styles.navButton}
+        onClick={() => onGoToPage(currentPage + 1)}
+        disabled={isLastPage}
+        aria-label="Next page"
+      >
+        →
+      </button>
+
+      <button
+        type="button"
+        className={styles.navButton}
+        onClick={() => onGoToPage(pageCount)}
+        disabled={isLastPage}
+        aria-label="Last page"
+        title="Last page"
+      >
+        »
+      </button>
+    </nav>
   );
 }

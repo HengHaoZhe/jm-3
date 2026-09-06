@@ -4,16 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
-import { apiFetch } from "@/app/lib/api";
-
-interface Album {
-  album_id: string;
-  title: string;
-}
-
-interface CreateAlbumResponse {
-  data: Album;
-}
+import { apiFetch, getApiErrorMessage } from "@/app/lib/api";
 
 function parseAlbumIds(input: string) {
   const tokens = input
@@ -77,23 +68,12 @@ export default function DownloadAlbumsPage() {
       });
 
       if (!response.ok) {
-        let message = `Failed to queue albums (${response.status})`;
-
-        try {
-          const result = await response.json();
-
-          if (result.message) {
-            message = result.message;
-          }
-
-          if (result.errors?.album_ids?.[0]) {
-            message = result.errors.album_ids[0];
-          }
-        } catch {
-          // Keep default error.
-        }
-
-        throw new Error(message);
+        throw new Error(
+          await getApiErrorMessage(
+            response,
+            `Failed to queue albums (${response.status})`,
+          ),
+        );
       }
 
       const result = await response.json();

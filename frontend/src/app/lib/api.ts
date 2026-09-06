@@ -1,80 +1,68 @@
 const configuredApiUrl =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const STORAGE_KEY = "selected_api_url";
-
-let cachedApiBaseUrl: string | null = null;
-
 export async function getApiBaseUrl(): Promise<string> {
-  if (cachedApiBaseUrl) {
-    return cachedApiBaseUrl;
-  }
-
-  if (typeof window !== "undefined") {
-    const savedApiUrl = sessionStorage.getItem(STORAGE_KEY);
-
-    if (savedApiUrl) {
-      cachedApiBaseUrl = savedApiUrl;
-      return savedApiUrl;
-    }
-
-    const browserApiUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
-
-    const candidates = [configuredApiUrl, browserApiUrl].filter(
-      (url, index, array) => array.indexOf(url) === index,
-    );
-
-    for (const apiUrl of candidates) {
-      try {
-        const response = await fetch(`${apiUrl}/api/albums`, {
-          method: "GET",
-          signal: AbortSignal.timeout(1500),
-        });
-
-        if (response.ok) {
-          cachedApiBaseUrl = apiUrl;
-          sessionStorage.setItem(STORAGE_KEY, apiUrl);
-
-          return apiUrl;
-        }
-      } catch {
-        // Try next URL.
-      }
-    }
-  }
-
-  cachedApiBaseUrl = configuredApiUrl;
-
   return configuredApiUrl;
 }
 
 export async function getApiUrl(): Promise<string> {
-  const apiUrl = await getApiBaseUrl();
-
-  return `${apiUrl}/api`;
+  return `${configuredApiUrl}/api`;
 }
 
 export async function apiFetch(
   path: string,
   options?: RequestInit,
 ): Promise<Response> {
-  /*
-   * On the browser, use the cached API URL directly.
-   */
-  const apiBaseUrl =
-    cachedApiBaseUrl ??
-    (typeof window !== "undefined"
-      ? sessionStorage.getItem(STORAGE_KEY)
-      : null) ??
-    configuredApiUrl;
+  return fetch(`${configuredApiUrl}/api${path}`, options);
+}
 
-  return fetch(`${apiBaseUrl}/api${path}`, options);
+export async function fetchAlbum<T>(path: string): Promise<T> {
+  const response = await apiFetch(path);
+
+  if (response.status === 404) {
+    throw new Error("Album not found.");
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch album (${response.status}).`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function getApiErrorMessage(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const result = await response.json();
+
+    const firstError = result.errors
+      ? Object.values(result.errors)
+          .flat()
+          .find((value) => typeof value === "string")
+      : null;
+
+    return firstError || result.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function getApiImageUrl(apiUrl: string | null, url: string): string {
+  if (!apiUrl) {
+    return url;
+  }
+
+  const parsedUrl = new URL(url);
+
+  return `${apiUrl}${parsedUrl.pathname}${parsedUrl.search}`;
+}
+
+export function getAlbumPath(albumId: string): string {
+  return `/albums/${encodeURIComponent(albumId)}`;
 }
 
 export function clearApiUrl(): void {
-  cachedApiBaseUrl = null;
-
-  if (typeof window !== "undefined") {
-    sessionStorage.removeItem(STORAGE_KEY);
-  }
+  // No cached API URL to clear.
 }

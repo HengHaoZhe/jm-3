@@ -4,53 +4,32 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import styles from "./page.module.css";
-import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
-
-type AlbumStatus = "queued" | "downloading" | "completed" | "failed";
+import { apiFetch, getAlbumPath, getApiErrorMessage } from "@/app/lib/api";
+import { useApiBaseUrl } from "@/app/lib/useApiBaseUrl";
+import {
+  ALBUM_STATUS_LABELS,
+  ALBUM_STATUSES,
+  ACTIVE_ALBUM_STATUSES,
+  AlbumStatus,
+  AlbumListResponse,
+  AlbumSummary,
+  createAlbumStatusCounts,
+} from "@/app/lib/types";
 
 type SortColumn = "id" | "album_id" | "title" | "status" | "page_count";
 type SortDirection = "asc" | "desc";
 type StatusFilter = "all" | AlbumStatus;
 
-const albumStatuses: AlbumStatus[] = [
-  "queued",
-  "downloading",
-  "completed",
-  "failed",
-];
-
-const statusLabels: Record<AlbumStatus, string> = {
-  queued: "Queued",
-  downloading: "Downloading",
-  completed: "Completed",
-  failed: "Failed",
-};
-
-interface Album {
-  id: number;
-  album_id: string;
-  title: string;
-  status: AlbumStatus;
-  page_count: number;
-  created_at: string;
-}
-
-interface AlbumsResponse {
-  data: Album[];
-}
+type Album = AlbumSummary;
 
 function getAlbumTitle(album: Album): string {
   return album.title || "Untitled Album";
 }
 
-function getAlbumPath(albumId: string): string {
-  return `/albums/${encodeURIComponent(albumId)}`;
-}
-
 export default function Home() {
   const searchParams = useSearchParams();
 
-  const [apiBaseUrl, setApiBaseUrl] = useState("");
+  const { apiUrl: apiBaseUrl } = useApiBaseUrl();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,18 +54,10 @@ export default function Home() {
   });
 
   const statusCounts = useMemo(() => {
-    return albums.reduce(
-      (counts, album) => {
-        counts[album.status] += 1;
-        return counts;
-      },
-      {
-        queued: 0,
-        downloading: 0,
-        completed: 0,
-        failed: 0,
-      } as Record<AlbumStatus, number>,
-    );
+    return albums.reduce((counts, album) => {
+      counts[album.status] += 1;
+      return counts;
+    }, createAlbumStatusCounts());
   }, [albums]);
 
   function getPreviewUrl(album: Album) {
@@ -186,7 +157,7 @@ export default function Home() {
         if (isBackgroundPolling) return;
         throw new Error(`Failed to fetch albums (${response.status})`);
       }
-      const result: AlbumsResponse = await response.json();
+      const result: AlbumListResponse = await response.json();
       setAlbums(result.data);
     } catch (err) {
       if (isBackgroundPolling) return;
@@ -208,22 +179,6 @@ export default function Home() {
   }, [searchParams]);
 
   useEffect(() => {
-    let active = true;
-
-    getApiBaseUrl()
-      .then((url) => {
-        if (active) {
-          setApiBaseUrl(url);
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     loadAlbums(false);
   }, []);
 
@@ -232,7 +187,7 @@ export default function Home() {
    */
   useEffect(() => {
     const hasActiveDownloads = albums.some((album) =>
-      ["queued", "downloading"].includes(album.status),
+      ACTIVE_ALBUM_STATUSES.includes(album.status),
     );
 
     if (!hasActiveDownloads) {
@@ -352,19 +307,6 @@ export default function Home() {
     window.alert("All reading progress has been cleared.");
   }
 
-  async function getErrorMessage(
-    response: Response,
-    defaultMsg: string,
-  ): Promise<string> {
-    try {
-      const result = await response.json();
-
-      return result.message || defaultMsg;
-    } catch {
-      return defaultMsg;
-    }
-  }
-
   async function handleRedownloadFailed() {
     if (statusCounts.failed === 0) {
       return;
@@ -388,7 +330,7 @@ export default function Home() {
 
       if (!response.ok) {
         throw new Error(
-          await getErrorMessage(
+          await getApiErrorMessage(
             response,
             `Failed to redownload failed albums (${response.status}).`,
           ),
@@ -426,7 +368,7 @@ export default function Home() {
 
       if (!response.ok) {
         throw new Error(
-          await getErrorMessage(
+          await getApiErrorMessage(
             response,
             `Failed to delete album (${response.status}).`,
           ),
@@ -538,9 +480,9 @@ export default function Home() {
                       label: "All",
                       count: albums.length,
                     },
-                    ...albumStatuses.map((status) => ({
+                    ...ALBUM_STATUSES.map((status) => ({
                       value: status,
-                      label: statusLabels[status],
+                      label: ALBUM_STATUS_LABELS[status],
                       count: statusCounts[status],
                     })),
                   ].map((option) => (
@@ -811,7 +753,7 @@ function StatusBadge({ status }: { status: AlbumStatus }) {
     <span className={`${styles.status} ${styles[`status-${status}`]}`}>
       <span className={styles.statusDot} />
 
-      {statusLabels[status]}
+      {ALBUM_STATUS_LABELS[status]}
     </span>
   );
 }

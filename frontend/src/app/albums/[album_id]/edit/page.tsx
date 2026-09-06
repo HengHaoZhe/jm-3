@@ -4,44 +4,22 @@ import Link from "next/link";
 import { DragEvent, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import styles from "../page.module.css";
-import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
-
-type AlbumStatus = "queued" | "downloading" | "completed" | "failed";
-
-interface Page {
-  id: number;
-  sort_order: number;
-  file_path: string;
-  url: string;
-}
-
-interface AlbumGroup {
-  name: string;
-  pages: Page[];
-}
-
-interface Album {
-  album_id: string;
-  title: string;
-  status: AlbumStatus;
-  page_count: number;
-  pages: Page[];
-  groups?: AlbumGroup[];
-}
-
-interface AlbumResponse {
-  data: Album;
-}
-
-function getImageUrl(apiUrl: string | null, url: string) {
-  if (!apiUrl) {
-    return url;
-  }
-
-  const parsedUrl = new URL(url);
-
-  return `${apiUrl}${parsedUrl.pathname}${parsedUrl.search}`;
-}
+import {
+  apiFetch,
+  fetchAlbum,
+  getApiErrorMessage,
+  getApiImageUrl,
+  getAlbumPath,
+} from "@/app/lib/api";
+import {
+  ALBUM_STATUS_LABELS,
+  Album,
+  AlbumGroup,
+  Page,
+  AlbumResponse,
+  AlbumStatus,
+} from "@/app/lib/types";
+import { useApiBaseUrl } from "@/app/lib/useApiBaseUrl";
 
 function getPageGroupName(filePath: string) {
   const pathParts = filePath.split(/[\\/]/);
@@ -76,7 +54,7 @@ export default function EditAlbumPage() {
   const router = useRouter();
 
   const [album, setAlbum] = useState<Album | null>(null);
-  const [apiUrl, setApiUrl] = useState<string | null>(null);
+  const { apiUrl } = useApiBaseUrl();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -175,42 +153,18 @@ export default function EditAlbumPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    getApiBaseUrl()
-      .then((url) => {
-        if (!cancelled) {
-          setApiUrl(url);
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!albumId) {
       return;
     }
 
-    async function fetchAlbum() {
+    async function loadAlbum() {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await apiFetch(`/albums/${albumId}/edit`);
-
-        if (response.status === 404) {
-          throw new Error("Album not found.");
-        }
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch album (${response.status}).`);
-        }
-
-        const result: AlbumResponse = await response.json();
+        const result = await fetchAlbum<AlbumResponse>(
+          `/albums/${albumId}/edit`,
+        );
         const loadedAlbum = result.data;
 
         setAlbum(loadedAlbum);
@@ -225,7 +179,7 @@ export default function EditAlbumPage() {
       }
     }
 
-    fetchAlbum();
+    loadAlbum();
   }, [albumId]);
 
   /*
@@ -485,7 +439,7 @@ export default function EditAlbumPage() {
 
       if (!response.ok) {
         throw new Error(
-          await getErrorMessage(
+          await getApiErrorMessage(
             response,
             `Failed to count pages (${response.status}).`,
           ),
@@ -517,7 +471,7 @@ export default function EditAlbumPage() {
 
       if (!response.ok) {
         throw new Error(
-          await getErrorMessage(
+          await getApiErrorMessage(
             response,
             `Failed to import files (${response.status}).`,
           ),
@@ -566,7 +520,7 @@ export default function EditAlbumPage() {
 
       if (!albumResponse.ok) {
         throw new Error(
-          await getErrorMessage(
+          await getApiErrorMessage(
             albumResponse,
             `Failed to update album (${albumResponse.status}).`,
           ),
@@ -597,14 +551,14 @@ export default function EditAlbumPage() {
 
       if (!reorderResponse.ok) {
         throw new Error(
-          await getErrorMessage(
+          await getApiErrorMessage(
             reorderResponse,
             `Failed to save page order (${reorderResponse.status}).`,
           ),
         );
       }
 
-      router.push(`/albums/${albumId}`);
+      router.push(getAlbumPath(albumId));
     } catch (err) {
       setSaveError(
         err instanceof Error ? err.message : "Failed to update album.",
@@ -660,7 +614,7 @@ export default function EditAlbumPage() {
 
           <div className={styles.pageOrderThumbnail}>
             <img
-              src={getImageUrl(apiUrl, page.url)}
+              src={getApiImageUrl(apiUrl, page.url)}
               alt={`Page ${pageNumber}`}
               loading="lazy"
             />
@@ -689,7 +643,7 @@ export default function EditAlbumPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <Link href={`/albums/${albumId}`} className={styles.backLink}>
+          <Link href={getAlbumPath(albumId)} className={styles.backLink}>
             ← Back to Album
           </Link>
 
@@ -706,7 +660,7 @@ export default function EditAlbumPage() {
   return (
     <main className={styles.page}>
       <div className={styles.container}>
-        <Link href={`/albums/${albumId}`} className={styles.backLink}>
+        <Link href={getAlbumPath(albumId)} className={styles.backLink}>
           ← Back to Album
         </Link>
 
@@ -878,7 +832,7 @@ export default function EditAlbumPage() {
               <button
                 type="button"
                 className={styles.cancelButton}
-                onClick={() => router.push(`/albums/${albumId}`)}
+                onClick={() => router.push(getAlbumPath(albumId))}
                 disabled={editBusy}
               >
                 Cancel
@@ -900,37 +854,12 @@ export default function EditAlbumPage() {
   );
 }
 
-async function getErrorMessage(response: Response, fallback: string) {
-  try {
-    const result = await response.json();
-
-    const firstError = result.errors
-      ? Object.values(result.errors)
-          .flat()
-          .find((value) => typeof value === "string")
-      : null;
-
-    return firstError || result.message || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function formatStatus(status: AlbumStatus) {
-  return {
-    queued: "Queued",
-    downloading: "Downloading",
-    completed: "Completed",
-    failed: "Failed",
-  }[status];
-}
-
 function StatusBadge({ status }: { status: AlbumStatus }) {
   return (
     <span className={`${styles.status} ${styles[`status-${status}`]}`}>
       <span className={styles.statusDot} />
 
-      {formatStatus(status)}
+      {ALBUM_STATUS_LABELS[status]}
     </span>
   );
 }

@@ -4,53 +4,27 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import styles from "./page.module.css";
-import { apiFetch, getApiBaseUrl } from "@/app/lib/api";
-
-type AlbumStatus = "queued" | "downloading" | "completed" | "failed";
-
-interface Page {
-  id: number;
-  sort_order: number;
-  file_path: string;
-  url: string;
-}
-
-interface Album {
-  album_id: string;
-  title: string;
-  status: AlbumStatus;
-  page_count: number;
-  pages: Page[];
-  created_at: string;
-}
-
-interface AlbumResponse {
-  data: Album;
-  meta?: {
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-    has_more: boolean;
-  };
-}
-
-function getImageUrl(apiUrl: string | null, url: string) {
-  if (!apiUrl) {
-    return url;
-  }
-
-  const parsedUrl = new URL(url);
-
-  return `${apiUrl}${parsedUrl.pathname}${parsedUrl.search}`;
-}
+import {
+  apiFetch,
+  fetchAlbum,
+  getApiErrorMessage,
+  getApiImageUrl,
+  getAlbumPath,
+} from "@/app/lib/api";
+import {
+  ALBUM_STATUS_LABELS,
+  Album,
+  AlbumResponse,
+  AlbumStatus,
+} from "@/app/lib/types";
+import { useApiBaseUrl } from "@/app/lib/useApiBaseUrl";
 
 export default function AlbumPage() {
   const params = useParams<{ album_id: string }>();
   const albumId = params.album_id;
 
   const [album, setAlbum] = useState<Album | null>(null);
-  const [apiUrl, setApiUrl] = useState<string | null>(null);
+  const { apiUrl } = useApiBaseUrl();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,34 +36,18 @@ export default function AlbumPage() {
   const [hasMorePages, setHasMorePages] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    getApiBaseUrl()
-      .then(setApiUrl)
-      .catch(() => undefined);
-  }, []);
-
   /*
    * Fetch first page of album pages.
    */
   useEffect(() => {
-    async function fetchAlbum() {
+    async function loadAlbum() {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await apiFetch(
+        const result = await fetchAlbum<AlbumResponse>(
           `/albums/${albumId}?per_page=20&page=1`,
         );
-
-        if (response.status === 404) {
-          throw new Error("Album not found.");
-        }
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch album (${response.status}).`);
-        }
-
-        const result: AlbumResponse = await response.json();
 
         setAlbum(result.data);
         setCurrentPage(result.meta?.current_page ?? 1);
@@ -106,7 +64,7 @@ export default function AlbumPage() {
     }
 
     if (albumId) {
-      fetchAlbum();
+      loadAlbum();
     }
   }, [albumId]);
 
@@ -130,15 +88,9 @@ export default function AlbumPage() {
 
     const interval = window.setInterval(async () => {
       try {
-        const response = await apiFetch(
+        const result = await fetchAlbum<AlbumResponse>(
           `/albums/${albumId}?per_page=20&page=1`,
         );
-
-        if (!response.ok) {
-          return;
-        }
-
-        const result: AlbumResponse = await response.json();
 
         setAlbum(result.data);
         setCurrentPage(result.meta?.current_page ?? 1);
@@ -221,11 +173,7 @@ export default function AlbumPage() {
         let message = `Failed to redownload album (${response.status}).`;
 
         try {
-          const result = await response.json();
-
-          if (result.message) {
-            message = result.message;
-          }
+          message = await getApiErrorMessage(response, message);
         } catch {
           // Use default message.
         }
@@ -256,9 +204,7 @@ export default function AlbumPage() {
    *
    * Create a copy so the original album.pages array is not mutated.
    */
-  const sortedPages = album
-    ? [...album.pages].sort((a, b) => a.sort_order - b.sort_order)
-    : [];
+  const sortedPages = album?.pages ?? [];
 
   if (loading) {
     return (
@@ -306,7 +252,7 @@ export default function AlbumPage() {
 
           <div className={styles.headerActions}>
             <Link
-              href={`/albums/${album.album_id}/edit`}
+              href={`${getAlbumPath(album.album_id)}/edit`}
               className={styles.editButton}
             >
               Edit
@@ -323,7 +269,7 @@ export default function AlbumPage() {
 
             {album.status === "completed" && (
               <Link
-                href={`/albums/${album.album_id}/read`}
+                href={`${getAlbumPath(album.album_id)}/read`}
                 className={styles.readButton}
               >
                 Read
@@ -342,7 +288,7 @@ export default function AlbumPage() {
           <div className={styles.infoCard}>
             <span className={styles.infoLabel}>Status</span>
 
-            <strong>{formatStatus(album.status)}</strong>
+            <strong>{ALBUM_STATUS_LABELS[album.status]}</strong>
           </div>
 
           <div className={styles.infoCard}>
@@ -407,7 +353,7 @@ export default function AlbumPage() {
               {sortedPages.map((page) => (
                 <figure key={page.id} className={styles.pagePreview}>
                   <Link
-                    href={`/albums/${album.album_id}/read?page=${page.sort_order}`}
+                    href={`${getAlbumPath(album.album_id)}/read?page=${page.sort_order}`}
                     className={styles.pagePreviewLink}
                   >
                     <div className={styles.pageLabel}>
@@ -415,7 +361,7 @@ export default function AlbumPage() {
                     </div>
 
                     <img
-                      src={getImageUrl(apiUrl, page.url)}
+                      src={getApiImageUrl(apiUrl, page.url)}
                       alt={`Page ${page.sort_order}`}
                       loading={page.sort_order <= 2 ? "eager" : "lazy"}
                     />
@@ -447,21 +393,12 @@ export default function AlbumPage() {
   );
 }
 
-function formatStatus(status: AlbumStatus) {
-  return {
-    queued: "Queued",
-    downloading: "Downloading",
-    completed: "Completed",
-    failed: "Failed",
-  }[status];
-}
-
 function StatusBadge({ status }: { status: AlbumStatus }) {
   return (
     <span className={`${styles.status} ${styles[`status-${status}`]}`}>
       <span className={styles.statusDot} />
 
-      {formatStatus(status)}
+      {ALBUM_STATUS_LABELS[status]}
     </span>
   );
 }
