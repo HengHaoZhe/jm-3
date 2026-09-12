@@ -353,7 +353,7 @@ export default function AlbumPage() {
               {sortedPages.map((page) => (
                 <figure key={page.id} className={styles.pagePreview}>
                   <Link
-                    href={`${getAlbumPath(album.album_id)}/read?page=${page.sort_order}`}
+                    href={`${getAlbumPath(album.album_id)}/read/${page.sort_order}`}
                     className={styles.pagePreviewLink}
                   >
                     <div className={styles.pageLabel}>

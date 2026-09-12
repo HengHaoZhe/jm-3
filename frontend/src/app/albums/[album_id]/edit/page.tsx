@@ -558,7 +558,7 @@ export default function EditAlbumPage() {
         );
       }
 
-      router.push(getAlbumPath(albumId));
+      router.push("/");
     } catch (err) {
       setSaveError(
         err instanceof Error ? err.message : "Failed to update album.",
@@ -643,8 +643,8 @@ export default function EditAlbumPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <Link href={getAlbumPath(albumId)} className={styles.backLink}>
-            ← Back to Album
+          <Link href="/" className={styles.backLink}>
+            ← Back to Library
           </Link>
 
           <div className={styles.message}>
@@ -660,8 +660,8 @@ export default function EditAlbumPage() {
   return (
     <main className={styles.page}>
       <div className={styles.container}>
-        <Link href={getAlbumPath(albumId)} className={styles.backLink}>
-          ← Back to Album
+        <Link href="/" className={styles.backLink}>
+          ← Back to Library
         </Link>
 
         <header className={styles.header}>

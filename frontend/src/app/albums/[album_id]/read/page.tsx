@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import { fetchAlbum, getApiImageUrl, getAlbumPath } from "@/app/lib/api";
 import { Album, AlbumResponse } from "@/app/lib/types";
@@ -30,12 +30,11 @@ function clampPage(pageNumber: number, pageCount: number) {
   return Math.min(Math.max(pageNumber, 1), pageCount);
 }
 
-export default function ReaderPage() {
-  const params = useParams<{ album_id: string }>();
+export function ReaderPage() {
+  const params = useParams<{ album_id: string; page?: string }>();
   const albumId = params.album_id;
-
-  const searchParams = useSearchParams();
-  const pageParam = searchParams.get("page");
+  const router = useRouter();
+  const pageParam = params.page ?? null;
 
   const [album, setAlbum] = useState<Album | null>(null);
   const { apiUrl, error: apiError } = useApiBaseUrl();
@@ -241,6 +240,7 @@ export default function ReaderPage() {
     const page = clampPage(pageNumber, album.pages.length);
 
     setCurrentPage(page);
+    router.replace(`${getAlbumPath(albumId)}/read/${page}`, { scroll: false });
   }
 
   function submitPageInput() {
@@ -526,4 +526,8 @@ function NavigationControls({
       </button>
     </nav>
   );
+}
+
+export default function ReaderRoute() {
+  return null;
 }
