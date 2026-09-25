@@ -243,7 +243,7 @@ class AlbumController extends Controller
   public function importPages(Album $album, AlbumImportService $importService)
   {
     try {
-      $importService->import($album);
+      $importService->import($album, allowEmpty: true);
     } catch (RuntimeException $e) {
       return response()->json([
         'message' => $e->getMessage(),

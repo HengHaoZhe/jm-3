@@ -14,13 +14,18 @@ class AlbumImportService
    * Import all image files from an album directory
    * and create the corresponding Page records.
    */
-  public function import(Album $album): void
+  public function import(Album $album, bool $allowEmpty = false): void
   {
     $albumId = $album->album_id;
     $importStart = microtime(true);
     $albumDirectory = config('manga.storage_path') . DIRECTORY_SEPARATOR . $albumId;
 
     if (!File::isDirectory($albumDirectory)) {
+      if ($allowEmpty) {
+        $this->clearPages($album, $albumId, $importStart, 'album directory does not exist');
+        return;
+      }
+
       throw new RuntimeException("Album directory does not exist: {$albumDirectory}");
     }
 
@@ -29,6 +34,11 @@ class AlbumImportService
     $fileScanDuration = microtime(true) - $scanStart;
 
     if (empty($files)) {
+      if ($allowEmpty) {
+        $this->clearPages($album, $albumId, $importStart, 'no image files found');
+        return;
+      }
+
       throw new RuntimeException("No image files found for album {$albumId}.");
     }
 
@@ -78,6 +88,25 @@ class AlbumImportService
       'page_preparation_duration' => $pagePreparationDuration,
       'bulk_insert_duration' => $pageInsertDuration,
       'insert_chunks' => $chunkCount,
+      'total_page_import_duration' => microtime(true) - $importStart,
+    ]);
+  }
+
+  private function clearPages(Album $album, string $albumId, float $importStart, string $reason): void
+  {
+    DB::transaction(function () use ($album) {
+      $album->pages()->delete();
+
+      $album->update([
+        'page_count' => 0,
+      ]);
+    });
+
+    logger()->info('ALBUM IMPORT: completed with no pages', [
+      'album_id' => $albumId,
+      'reason' => $reason,
+      'files_processed' => 0,
+      'pages_processed' => 0,
       'total_page_import_duration' => microtime(true) - $importStart,
     ]);
   }

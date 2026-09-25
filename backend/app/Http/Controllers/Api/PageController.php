@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class PageController extends Controller
 {
-  public function image(string $album_id, int $sort_order)
+  public function image(Request $request, string $album_id, int $sort_order)
   {
     $page = Page::where('album_id', $album_id)->where('sort_order', $sort_order)->firstOrFail();
 
@@ -24,11 +24,20 @@ class PageController extends Controller
       abort(404, 'Page image not found.');
     }
 
-    return response()->file($filePath, [
-      'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
-      'Pragma' => 'no-cache',
-      'Expires' => '0',
-    ]);
+    $response = response()->file($filePath);
+
+    $response->setPrivate();
+    $response->setMaxAge(31536000);
+    $response->setEtag(sha1($page->album_id . ':' . $page->sort_order . ':' . optional($page->updated_at)->timestamp));
+    $response->headers->set('Cache-Control', 'private, max-age=31536000, immutable');
+
+    if ($page->updated_at) {
+      $response->setLastModified($page->updated_at);
+    }
+
+    $response->isNotModified($request);
+
+    return $response;
   }
 
   public function albumPages(string $album_id)
@@ -46,13 +55,27 @@ class PageController extends Controller
       'time' => microtime(true) - $start,
     ]);
     $validated = $request->validate([
-      'page_ids' => ['required', 'array'],
+      'page_ids' => ['present', 'array'],
       'page_ids.*' => ['required', 'integer', 'distinct'],
     ]);
     logger()->info('PAGE REORDER: validation', [
       'time' => microtime(true) - $start,
     ]);
     $pageIds = $validated['page_ids'];
+
+    if (empty($pageIds)) {
+      if ($album->pages()->exists()) {
+        throw ValidationException::withMessages(['page_ids' => 'The submitted pages do not match the album pages.',]);
+      }
+
+      logger()->info('PAGE REORDER: no pages to reorder', [
+        'time' => microtime(true) - $start,
+      ]);
+
+      return response()->json([
+        'message' => 'Page order updated successfully.',
+      ]);
+    }
 
     /*
      * Make sure the submitted page IDs exactly match

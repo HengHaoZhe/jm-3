@@ -258,6 +258,9 @@
   position: absolute;
   top: 50%;
   right: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -352,9 +355,13 @@
 }
 
 .sortIndicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 12px;
   color: #aaa;
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .sortButton:hover .sortIndicator {
@@ -592,6 +599,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 38px;
   padding: 0 14px;
   border-radius: 8px;

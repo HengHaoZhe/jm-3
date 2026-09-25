@@ -47,6 +47,7 @@ export default function Home() {
   const [hoveredAlbum, setHoveredAlbum] = useState<Album | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
+  const [previewRequestId, setPreviewRequestId] = useState(0);
 
   const [previewPosition, setPreviewPosition] = useState({
     x: 0,
@@ -75,6 +76,7 @@ export default function Home() {
     setHoveredAlbum(album);
     setPreviewLoading(true);
     setPreviewError(false);
+    setPreviewRequestId((currentId) => currentId + 1);
     updatePreviewPosition(clientX, clientY);
   }
 
@@ -277,12 +279,21 @@ export default function Home() {
 
   function renderSortIndicator(column: SortColumn) {
     if (sortColumn !== column) {
-      return <span className={styles.sortIndicator}>↕</span>;
+      return (
+        <span className={styles.sortIndicator}>
+          <i className="bx bx-sort-alt-2" aria-hidden="true" />
+        </span>
+      );
     }
 
     return (
       <span className={styles.sortIndicator}>
-        {sortDirection === "asc" ? "↑" : "↓"}
+        <i
+          className={
+            sortDirection === "asc" ? "bx bx-sort-up" : "bx bx-sort-down"
+          }
+          aria-hidden="true"
+        />
       </span>
     );
   }
@@ -403,7 +414,8 @@ export default function Home() {
 
           <div className={styles.headerActions}>
             <Link href="/albums/download" className={styles.downloadButton}>
-              + Download Albums
+              <i className="bx bx-plus" aria-hidden="true" />
+              <span>Download Albums</span>
             </Link>
 
             <button
@@ -453,7 +465,8 @@ export default function Home() {
             <p>Download an album to get started.</p>
 
             <Link href="/albums/download" className={styles.downloadButton}>
-              + Download Albums
+              <i className="bx bx-plus" aria-hidden="true" />
+              <span>Download Albums</span>
             </Link>
           </div>
         )}
@@ -519,7 +532,7 @@ export default function Home() {
                       onClick={() => setSearch("")}
                       aria-label="Clear search"
                     >
-                      ×
+                      <i className="bx bx-x" aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -675,7 +688,7 @@ export default function Home() {
 
             {!previewError && (
               <img
-                key={hoveredAlbum.id}
+                key={`${hoveredAlbum.id}-${previewRequestId}`}
                 src={getPreviewUrl(hoveredAlbum)}
                 alt={hoveredAlbum.title || "Album preview"}
                 className={`${styles.previewImage} ${

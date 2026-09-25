@@ -161,6 +161,10 @@
 }
 
 .modeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
   line-height: 1;
 }
 
@@ -248,6 +252,8 @@
   color: #ddd;
 
   cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .navButton:hover:not(:disabled) {
@@ -462,6 +468,18 @@
   pointer-events: none;
 }
 
+.pageLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 180px;
+  min-height: 80px;
+
+  color: #aaa;
+  font-size: 14px;
+}
+
 /* =========================================================
    VERTICAL READER
    ========================================================= */
@@ -532,6 +550,18 @@
   line-height: normal;
 
   pointer-events: none;
+}
+
+.verticalLoadMore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-height: 72px;
+
+  color: #aaa;
+  font-size: 13px;
 }
 
 /* =========================================================

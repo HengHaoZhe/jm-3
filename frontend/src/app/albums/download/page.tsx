@@ -114,7 +114,8 @@ export default function DownloadAlbumsPage() {
     <main className={styles.page}>
       <div className={styles.container}>
         <Link href="/" className={styles.backLink}>
-          ← Back to Library
+          <i className="bx bx-arrow-back" aria-hidden="true" />
+          <span>Back to Library</span>
         </Link>
 
         <header className={styles.header}>

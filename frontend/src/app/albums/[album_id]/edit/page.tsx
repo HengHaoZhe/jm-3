@@ -496,6 +496,10 @@ export default function EditAlbumPage() {
 
   async function saveChanges() {
     const pageCount = Number(editPageCount);
+    const pageIds = editGroups.flatMap((group) =>
+      group.pages.map((page) => page.id),
+    );
+    const savedPageCount = pageIds.length === 0 ? 0 : pageCount;
 
     if (!Number.isInteger(pageCount) || pageCount < 0) {
       setSaveError("Page count must be a non-negative whole number.");
@@ -514,7 +518,7 @@ export default function EditAlbumPage() {
         body: JSON.stringify({
           title: editTitle,
           status: editStatus,
-          page_count: pageCount,
+          page_count: savedPageCount,
         }),
       });
 
@@ -535,27 +539,28 @@ export default function EditAlbumPage() {
        * - page order inside each group determines the minor ordering
        * - pages moved between groups are saved correctly
        */
-      const pageIds = editGroups.flatMap((group) =>
-        group.pages.map((page) => page.id),
-      );
-
-      const reorderResponse = await apiFetch(`/albums/${albumId}/pages/order`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          page_ids: pageIds,
-        }),
-      });
-
-      if (!reorderResponse.ok) {
-        throw new Error(
-          await getApiErrorMessage(
-            reorderResponse,
-            `Failed to save page order (${reorderResponse.status}).`,
-          ),
+      if (pageIds.length > 0) {
+        const reorderResponse = await apiFetch(
+          `/albums/${albumId}/pages/order`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              page_ids: pageIds,
+            }),
+          },
         );
+
+        if (!reorderResponse.ok) {
+          throw new Error(
+            await getApiErrorMessage(
+              reorderResponse,
+              `Failed to save page order (${reorderResponse.status}).`,
+            ),
+          );
+        }
       }
 
       router.push("/");
@@ -607,7 +612,7 @@ export default function EditAlbumPage() {
             .join(" ")}
         >
           <div className={styles.dragHandle} aria-hidden="true">
-            ⋮⋮
+            <i className="bx bx-grid-vertical" />
           </div>
 
           <div className={styles.pageOrderNumber}>{pageNumber}</div>
@@ -644,7 +649,8 @@ export default function EditAlbumPage() {
       <main className={styles.page}>
         <div className={styles.container}>
           <Link href="/" className={styles.backLink}>
-            ← Back to Library
+            <i className="bx bx-arrow-back" aria-hidden="true" />
+            <span>Back to Library</span>
           </Link>
 
           <div className={styles.message}>
@@ -661,7 +667,8 @@ export default function EditAlbumPage() {
     <main className={styles.page}>
       <div className={styles.container}>
         <Link href="/" className={styles.backLink}>
-          ← Back to Library
+          <i className="bx bx-arrow-back" aria-hidden="true" />
+          <span>Back to Library</span>
         </Link>
 
         <header className={styles.header}>
@@ -812,7 +819,13 @@ export default function EditAlbumPage() {
                         .filter(Boolean)
                         .join(" ")}
                     >
-                      <strong>{group.name}</strong>
+                      <span className={styles.pageOrderGroupTitle}>
+                        <i
+                          className={`bx bx-chevron-right ${styles.groupDisclosureIcon}`}
+                          aria-hidden="true"
+                        />
+                        <strong>{group.name}</strong>
+                      </span>
 
                       <span className="badge text-bg-light">
                         {group.pages.length}{" "}
