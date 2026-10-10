@@ -13,7 +13,28 @@ export async function apiFetch(
   path: string,
   options?: RequestInit,
 ): Promise<Response> {
-  return fetch(`${configuredApiUrl}/api${path}`, options);
+  const url = `${configuredApiUrl}/api${path}`;
+  const method = (options?.method || "GET").toUpperCase();
+  const startedAt = performance.now();
+
+  try {
+    const response = await fetch(url, options);
+    const durationMs = Math.round(performance.now() - startedAt);
+    const logDetails = { method, url, status: response.status, durationMs };
+
+    if (response.ok) {
+      console.info("[API] Request completed", logDetails);
+    } else {
+      console.error("[API] Request failed", logDetails);
+    }
+
+    return response;
+  } catch (error) {
+    const durationMs = Math.round(performance.now() - startedAt);
+
+    console.error("[API] Request error", { method, url, durationMs, error });
+    throw error;
+  }
 }
 
 export async function fetchAlbum<T>(path: string): Promise<T> {

@@ -219,7 +219,6 @@
 .redownloadButton,
 .cancelButton,
 .saveButton,
-.countPagesButton,
 .importButton {
   display: inline-flex;
   align-items: center;
@@ -300,30 +299,6 @@
   outline-offset: 1px;
 }
 
-.pageCountInput {
-  display: flex;
-  gap: 8px;
-}
-
-.pageCountInput input {
-  flex: 1;
-  min-width: 0;
-}
-
-.countPagesButton {
-  flex-shrink: 0;
-  min-height: 42px;
-  padding: 0 14px;
-  border: 1px solid #d4d4d4;
-  background: #f5f5f5;
-  color: #333;
-  font-size: 13px;
-}
-
-.countPagesButton:hover:not(:disabled) {
-  background: #e5e5e5;
-}
-
 /* Import */
 
 .importField {
@@ -391,7 +366,6 @@
 .redownloadButton:disabled,
 .cancelButton:disabled,
 .saveButton:disabled,
-.countPagesButton:disabled,
 .importButton:disabled,
 .formField input:disabled,
 .formField select:disabled {
@@ -554,14 +528,6 @@
   .pagePreviewList {
     grid-template-columns: 1fr;
   }
-
-  .pageCountInput {
-    flex-direction: column;
-  }
-
-  .countPagesButton {
-    width: 100%;
-  }
 }
 .pageOrderSection {
   grid-column: 1 / -1;
@@ -668,6 +634,18 @@
   color: #777;
   font-size: 12px;
   font-weight: 400;
+}
+
+.pageOrderGroupCount {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f8f9fa;
+  line-height: 1;
+  text-align: center;
+  vertical-align: baseline;
+  white-space: nowrap;
 }
 
 .pageOrderItem {

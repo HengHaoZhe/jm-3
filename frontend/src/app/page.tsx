@@ -63,7 +63,10 @@ export default function Home() {
 
   function getPreviewUrl(album: Album) {
     const baseUrl = apiBaseUrl || "";
-    return `${baseUrl}/api${getAlbumPath(album.album_id)}/pages/1/image`;
+    // Image responses are immutable, so give every newly opened preview its
+    // own URL. This prevents a prior hover from reusing an outdated first page
+    // after the album has been re-imported or its image has been replaced.
+    return `${baseUrl}/api${getAlbumPath(album.album_id)}/pages/1/image?v=${previewRequestId}`;
   }
 
   function resetPreview() {

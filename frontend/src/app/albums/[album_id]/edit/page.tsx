@@ -59,8 +59,6 @@ export default function EditAlbumPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [countingPages, setCountingPages] = useState(false);
-  const [countError, setCountError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -423,41 +421,8 @@ export default function EditAlbumPage() {
   }
 
   function resetErrors() {
-    setCountError(null);
     setSaveError(null);
     setImportError(null);
-  }
-
-  async function countPages() {
-    try {
-      setCountingPages(true);
-      resetErrors();
-
-      const response = await apiFetch(`/albums/${albumId}/count-pages`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          await getApiErrorMessage(
-            response,
-            `Failed to count pages (${response.status}).`,
-          ),
-        );
-      }
-
-      const result: AlbumResponse = await response.json();
-
-      setAlbum(result.data);
-      setEditPageCount(String(result.data.page_count));
-      setEditGroups(getAlbumGroups(result.data));
-    } catch (err) {
-      setCountError(
-        err instanceof Error ? err.message : "Failed to count pages.",
-      );
-    } finally {
-      setCountingPages(false);
-    }
   }
 
   async function importPages() {
@@ -501,35 +466,14 @@ export default function EditAlbumPage() {
     );
     const savedPageCount = pageIds.length === 0 ? 0 : pageCount;
 
-    if (!Number.isInteger(pageCount) || pageCount < 0) {
-      setSaveError("Page count must be a non-negative whole number.");
+    if (!Number.isInteger(pageCount) || pageCount < 0 || pageCount > 65535) {
+      setSaveError("Page count must be a whole number between 0 and 65535.");
       return;
     }
 
     try {
       setSaving(true);
       resetErrors();
-
-      const albumResponse = await apiFetch(`/albums/${albumId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: editTitle,
-          status: editStatus,
-          page_count: savedPageCount,
-        }),
-      });
-
-      if (!albumResponse.ok) {
-        throw new Error(
-          await getApiErrorMessage(
-            albumResponse,
-            `Failed to update album (${albumResponse.status}).`,
-          ),
-        );
-      }
 
       /*
        * Flatten the groups in their current order.
@@ -563,6 +507,27 @@ export default function EditAlbumPage() {
         }
       }
 
+      const albumResponse = await apiFetch(`/albums/${albumId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: editTitle,
+          status: editStatus,
+          page_count: savedPageCount,
+        }),
+      });
+
+      if (!albumResponse.ok) {
+        throw new Error(
+          await getApiErrorMessage(
+            albumResponse,
+            `Failed to update album (${albumResponse.status}).`,
+          ),
+        );
+      }
+
       router.push("/");
     } catch (err) {
       setSaveError(
@@ -573,7 +538,7 @@ export default function EditAlbumPage() {
     }
   }
 
-  const editBusy = saving || countingPages || importing;
+  const editBusy = saving || importing;
 
   const totalPageCount = editGroups.reduce(
     (count, group) => count + group.pages.length,
@@ -680,7 +645,7 @@ export default function EditAlbumPage() {
             <p className={styles.albumId}>ID: {album.album_id}</p>
           </div>
 
-          <StatusBadge status={album.status} />
+          <StatusBadge status={editStatus} />
         </header>
 
         <section className={styles.editSection}>
@@ -725,26 +690,15 @@ export default function EditAlbumPage() {
             <label className={styles.formField}>
               <span>Page Count</span>
 
-              <div className={styles.pageCountInput}>
-                <input
-                  type="number"
-                  min="0"
-                  max="65535"
-                  step="1"
-                  value={editPageCount}
-                  onChange={(event) => setEditPageCount(event.target.value)}
-                  disabled={editBusy}
-                />
-
-                <button
-                  type="button"
-                  className={styles.countPagesButton}
-                  onClick={countPages}
-                  disabled={editBusy}
-                >
-                  {countingPages ? "Counting..." : "Count Pages"}
-                </button>
-              </div>
+              <input
+                type="number"
+                min="0"
+                max="65535"
+                step="1"
+                value={editPageCount}
+                onChange={(event) => setEditPageCount(event.target.value)}
+                disabled={editBusy}
+              />
             </label>
 
             <div className={styles.importField}>
@@ -770,8 +724,6 @@ export default function EditAlbumPage() {
             {importError && (
               <div className={styles.saveError}>{importError}</div>
             )}
-
-            {countError && <div className={styles.saveError}>{countError}</div>}
 
             {saveError && <div className={styles.saveError}>{saveError}</div>}
 
@@ -806,9 +758,6 @@ export default function EditAlbumPage() {
                       onDragEnd={handleGroupDragEnd}
                       className={[
                         styles.pageOrderGroupHeader,
-                        "d-flex",
-                        "align-items-center",
-                        "justify-content-between",
                         draggedGroupName === group.name
                           ? styles.pageOrderGroupDragging
                           : "",
@@ -827,7 +776,7 @@ export default function EditAlbumPage() {
                         <strong>{group.name}</strong>
                       </span>
 
-                      <span className="badge text-bg-light">
+                      <span className={styles.pageOrderGroupCount}>
                         {group.pages.length}{" "}
                         {group.pages.length === 1 ? "page" : "pages"}
                       </span>

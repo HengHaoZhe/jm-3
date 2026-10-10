@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
     "127.0.0.1",
     "100.83.172.126",
     "hrtt.dpdns.org",
-    "api.hrtt.dpdns.org",
   ],
 };
 
