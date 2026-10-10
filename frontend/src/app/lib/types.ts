@@ -28,6 +28,15 @@ export interface AlbumGroup {
   pages: Page[];
 }
 
+export interface EditAlbum {
+  album_id: string;
+  title: string;
+  status: AlbumStatus;
+  page_count: number;
+  groups: AlbumGroup[];
+  created_at: string;
+}
+
 export interface Album {
   album_id: string;
   title: string;
@@ -35,7 +44,6 @@ export interface Album {
   page_count: number;
   pages: Page[];
   created_at: string;
-  groups?: AlbumGroup[];
 }
 
 export interface AlbumSummary {
@@ -58,6 +66,10 @@ export interface AlbumPaginationMeta {
 export interface AlbumResponse {
   data: Album;
   meta?: AlbumPaginationMeta;
+}
+
+export interface EditAlbumResponse {
+  data: EditAlbum;
 }
 
 export interface AlbumListResponse {

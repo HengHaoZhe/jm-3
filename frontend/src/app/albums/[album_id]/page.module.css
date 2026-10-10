@@ -577,22 +577,13 @@
   list-style: none;
 }
 
-.pageOrderGroupHeader[draggable="true"] {
-  cursor: grab;
-}
-
-.pageOrderGroupHeader[draggable="true"]:active {
-  cursor: grabbing;
-}
-
 .pageOrderGroupDragging {
-  opacity: 0.45;
-}
-
-.pageOrderGroupDragOver {
+  position: relative;
+  z-index: 2;
   border-radius: 8px;
   background: #f5f5f5;
   outline: 1px solid #111;
+  opacity: 0.85;
 }
 
 .pageOrderGroupHeader::-webkit-details-marker {
@@ -648,6 +639,57 @@
   white-space: nowrap;
 }
 
+.pageOrderGroupActions {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.groupDragHandle,
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #999;
+  cursor: grab;
+  line-height: 1;
+  touch-action: none;
+}
+
+.groupDragHandle {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  font-size: 18px;
+}
+
+.groupDragHandle:hover:not(:disabled),
+.dragHandle:hover:not(:disabled) {
+  background: #eee;
+  color: #444;
+}
+
+.groupDragHandle:active:not(:disabled),
+.dragHandle:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.groupDragHandle:focus-visible,
+.dragHandle:focus-visible {
+  outline: 2px solid #555;
+  outline-offset: 2px;
+}
+
+.groupDragHandle:disabled,
+.dragHandle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .pageOrderItem {
   display: flex;
   align-items: center;
@@ -657,7 +699,6 @@
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #fff;
-  cursor: grab;
   user-select: none;
   transition:
     border-color 0.15s ease,
@@ -671,29 +712,32 @@
   background: #fafafa;
 }
 
-.pageOrderItem:active {
-  cursor: grabbing;
-}
-
 .pageOrderItemDragging {
-  opacity: 0.4;
-}
-
-.pageOrderItemDragOver {
+  position: relative;
+  z-index: 2;
   border-color: #111;
   background: #f5f5f5;
-  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  opacity: 0.85;
 }
 
 .dragHandle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 20px;
-  color: #999;
+  width: 28px;
+  height: 36px;
+  flex: 0 0 28px;
+  border-radius: 5px;
   font-size: 20px;
   font-weight: 700;
-  line-height: 1;
+}
+
+.emptyPageOrderGroup {
+  min-height: 56px;
+  padding: 18px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  color: #888;
+  font-size: 12px;
+  text-align: center;
 }
 
 .pageOrderNumber {

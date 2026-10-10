@@ -7,6 +7,7 @@ use App\Http\Requests\BulkStoreAlbumRequest;
 use App\Http\Requests\StoreAlbumRequest;
 use App\Http\Requests\UpdateAlbumRequest;
 use App\Http\Resources\AlbumResource;
+use App\Http\Resources\EditAlbumResource;
 use App\Jobs\DownloadAlbumJob;
 use App\Models\Album;
 use App\Services\AlbumImportService;
@@ -85,7 +86,7 @@ class AlbumController extends Controller
 
   public function edit(Album $album)
   {
-    return new AlbumResource($album->load('pages'));
+    return new EditAlbumResource($album->load('pages'));
   }
 
   /**
@@ -254,14 +255,14 @@ class AlbumController extends Controller
       'status' => Album::STATUS_COMPLETED,
     ]);
 
-    return new AlbumResource(
+    return new EditAlbumResource(
       $album->fresh()->load('pages')
     );
   }
 
   public function reader(Album $album)
   {
-    return $this->edit($album);
+    return new AlbumResource($album->load('pages'));
   }
 
   /**
