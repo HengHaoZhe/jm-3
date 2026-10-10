@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import styles from "./page.module.css";
@@ -48,8 +48,10 @@ export default function Home() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const [previewRequestId, setPreviewRequestId] = useState(0);
-
-  const [previewPosition, setPreviewPosition] = useState({
+  const previewCardRef = useRef<HTMLDivElement | null>(null);
+  const previewFrameRef = useRef<number | null>(null);
+  const latestPointerRef = useRef({ x: 0, y: 0 });
+  const previewPositionRef = useRef({
     x: 0,
     y: 0,
   });
@@ -70,6 +72,11 @@ export default function Home() {
   }
 
   function resetPreview() {
+    if (previewFrameRef.current !== null) {
+      cancelAnimationFrame(previewFrameRef.current);
+      previewFrameRef.current = null;
+    }
+
     setHoveredAlbum(null);
     setPreviewLoading(false);
     setPreviewError(false);
@@ -80,10 +87,10 @@ export default function Home() {
     setPreviewLoading(true);
     setPreviewError(false);
     setPreviewRequestId((currentId) => currentId + 1);
-    updatePreviewPosition(clientX, clientY);
+    updatePreviewPosition(clientX, clientY, true);
   }
 
-  function updatePreviewPosition(clientX: number, clientY: number) {
+  function calculatePreviewPosition(clientX: number, clientY: number) {
     const isMobile = window.innerWidth <= 600;
 
     const previewWidth = isMobile ? 210 : 240;
@@ -107,7 +114,40 @@ export default function Home() {
     x = Math.min(Math.max(x, viewportPadding), Math.max(viewportPadding, maxX));
     y = Math.min(Math.max(y, viewportPadding), Math.max(viewportPadding, maxY));
 
-    setPreviewPosition({ x, y });
+    return { x, y };
+  }
+
+  function applyPreviewPosition(clientX: number, clientY: number) {
+    const position = calculatePreviewPosition(clientX, clientY);
+
+    previewPositionRef.current = position;
+
+    if (previewCardRef.current) {
+      previewCardRef.current.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+    }
+  }
+
+  function updatePreviewPosition(
+    clientX: number,
+    clientY: number,
+    immediate = false,
+  ) {
+    latestPointerRef.current = { x: clientX, y: clientY };
+
+    if (immediate) {
+      applyPreviewPosition(clientX, clientY);
+      return;
+    }
+
+    if (previewFrameRef.current !== null) return;
+
+    previewFrameRef.current = requestAnimationFrame(() => {
+      previewFrameRef.current = null;
+      applyPreviewPosition(
+        latestPointerRef.current.x,
+        latestPointerRef.current.y,
+      );
+    });
   }
 
   function handleRowMouseEnter(
@@ -175,6 +215,14 @@ export default function Home() {
   function refreshAlbums() {
     return loadAlbums(true);
   }
+
+  useEffect(() => {
+    return () => {
+      if (previewFrameRef.current !== null) {
+        cancelAnimationFrame(previewFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const urlSearch = searchParams.get("search");
@@ -674,11 +722,15 @@ export default function Home() {
 
       {hoveredAlbum && hoveredAlbum.page_count > 0 && (
         <div
-          className={styles.previewCard}
-          style={{
-            left: previewPosition.x,
-            top: previewPosition.y,
+          ref={(element) => {
+            previewCardRef.current = element;
+
+            if (element) {
+              const { x, y } = previewPositionRef.current;
+              element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            }
           }}
+          className={styles.previewCard}
         >
           <div className={styles.previewImageWrapper}>
             {previewLoading && (

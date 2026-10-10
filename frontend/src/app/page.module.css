@@ -688,6 +688,8 @@
 
 .previewCard {
   position: fixed;
+  top: 0;
+  left: 0;
   z-index: 9999;
   width: 240px;
   overflow: hidden;
@@ -698,6 +700,7 @@
     0 12px 35px rgba(0, 0, 0, 0.18),
     0 3px 10px rgba(0, 0, 0, 0.08);
   pointer-events: none;
+  will-change: transform;
 }
 
 .previewImageWrapper {
