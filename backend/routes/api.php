@@ -12,6 +12,9 @@ Route::post('/albums/redownload-failed', [AlbumController::class, 'redownloadFai
 Route::post('/albums/{album}/redownload', [AlbumController::class, 'redownload']);
 Route::post('/albums/{album}/count-pages', [AlbumController::class, 'countPages']);
 Route::post('/albums/{album}/import-pages', [AlbumController::class, 'importPages']);
+Route::get('/albums/{album}/reading-progress', [AlbumController::class, 'readingProgress']);
+Route::post('/albums/{album}/reading-progress', [AlbumController::class, 'storeReadingProgress']);
+Route::delete('/reading-progress', [AlbumController::class, 'clearReadingProgress']);
 Route::get('albums/{album}/pages', [PageController::class, 'albumPages'])->name('albums.pages');
 Route::get('albums/{album}/pages/{sort_order}/image', [PageController::class, 'image'])->name('pages.image');
 Route::put('/albums/{album}/pages/order', [PageController::class, 'reorder']);

@@ -76,6 +76,12 @@ export interface AlbumListResponse {
   data: AlbumSummary[];
 }
 
+export interface ReadingProgressResponse {
+  data: {
+    page_number: number | null;
+  };
+}
+
 export function createAlbumStatusCounts(): Record<AlbumStatus, number> {
   return ALBUM_STATUSES.reduce(
     (counts, status) => {

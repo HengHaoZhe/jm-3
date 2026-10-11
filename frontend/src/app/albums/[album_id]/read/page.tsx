@@ -4,18 +4,19 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import styles from "./page.module.css";
-import { fetchAlbum, getApiImageUrl, getAlbumPath } from "@/app/lib/api";
-import { Album, AlbumResponse, Page } from "@/app/lib/types";
+import { apiFetch, fetchAlbum, getApiImageUrl, getAlbumPath } from "@/app/lib/api";
+import {
+  Album,
+  AlbumResponse,
+  Page,
+  ReadingProgressResponse,
+} from "@/app/lib/types";
 import { useApiBaseUrl } from "@/app/lib/useApiBaseUrl";
 
 type ReaderMode = "single" | "vertical";
 
 const PAGE_BATCH_SIZE = 50;
 const PRELOADED_PAGE_RADIUS = 5;
-
-function getProgressKey(albumId: string) {
-  return `jm-next-reading-progress:${albumId}`;
-}
 
 function getReaderModeKey(albumId: string) {
   return `jm-next-reader-mode:${albumId}`;
@@ -82,6 +83,10 @@ export function ReaderPage() {
   const verticalLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const inFlightBatchesRef = useRef(new Set<number>());
   const preloadedImagesRef = useRef(new Map<string, HTMLImageElement>());
+  const progressTimerRef = useRef<number | null>(null);
+  const pendingProgressRef = useRef<number | null>(null);
+  const progressSaveInFlightRef = useRef(false);
+  const currentPageRef = useRef(1);
 
   useEffect(() => {
     if (!albumId) {
@@ -105,7 +110,10 @@ export function ReaderPage() {
           initialPageParamRef.current !== null
             ? Number(initialPageParamRef.current)
             : NaN;
-        const savedPage = Number(localStorage.getItem(getProgressKey(albumId)));
+        const progressResponse = await fetchAlbum<ReadingProgressResponse>(
+          `/albums/${albumId}/reading-progress`,
+        );
+        const savedPage = progressResponse.data.page_number ?? NaN;
         const preferredPage = isPositiveInteger(pageFromUrl)
           ? pageFromUrl
           : isPositiveInteger(savedPage)
@@ -181,8 +189,40 @@ export function ReaderPage() {
       return;
     }
 
-    localStorage.setItem(getProgressKey(album.album_id), String(currentPage));
+    currentPageRef.current = currentPage;
+    queueProgressSave(currentPage);
   }, [album, currentPage, progressRestored]);
+
+  useEffect(() => {
+    return () => {
+      if (progressTimerRef.current !== null) {
+        window.clearTimeout(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+
+      void flushProgressSave(true);
+    };
+  }, [albumId]);
+
+  useEffect(() => {
+    function saveProgressBeforeExit() {
+      queueProgressSave(currentPageRef.current, true);
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        saveProgressBeforeExit();
+      }
+    }
+
+    window.addEventListener("pagehide", saveProgressBeforeExit);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", saveProgressBeforeExit);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [albumId]);
 
   useEffect(() => {
     if (!album || !modeRestored) {
@@ -272,6 +312,54 @@ export function ReaderPage() {
       block: "start",
       behavior: "auto",
     });
+  }
+
+  function queueProgressSave(pageNumber: number, immediately = false) {
+    pendingProgressRef.current = pageNumber;
+
+    if (progressTimerRef.current !== null) {
+      window.clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+
+    if (immediately) {
+      void flushProgressSave(true);
+      return;
+    }
+
+    progressTimerRef.current = window.setTimeout(() => {
+      progressTimerRef.current = null;
+      void flushProgressSave();
+    }, 500);
+  }
+
+  async function flushProgressSave(keepalive = false) {
+    if (progressSaveInFlightRef.current || pendingProgressRef.current === null) {
+      return;
+    }
+
+    const pageNumber = pendingProgressRef.current;
+    pendingProgressRef.current = null;
+    progressSaveInFlightRef.current = true;
+
+    try {
+      await apiFetch(`/albums/${albumId}/reading-progress`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ page_number: pageNumber }),
+        keepalive,
+      });
+    } catch {
+      // A later navigation or reader exit will retry with the newest page.
+    } finally {
+      progressSaveInFlightRef.current = false;
+
+      if (pendingProgressRef.current !== null) {
+        void flushProgressSave();
+      }
+    }
   }
 
   function preloadPageImage(page: Page) {

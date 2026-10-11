@@ -265,6 +265,42 @@ class AlbumController extends Controller
     return new AlbumResource($album->load('pages'));
   }
 
+  public function readingProgress(Album $album)
+  {
+    return response()->json([
+      'data' => [
+        'page_number' => DB::table('reading_progress')
+          ->where('album_id', $album->album_id)
+          ->value('page_number'),
+      ],
+    ]);
+  }
+
+  public function storeReadingProgress(Request $request, Album $album)
+  {
+    $validated = $request->validate([
+      'page_number' => ['required', 'integer', 'min:1', 'max:' . $album->page_count],
+    ]);
+
+    DB::table('reading_progress')->upsert(
+      [[
+        'album_id' => $album->album_id,
+        'page_number' => $validated['page_number'],
+      ]],
+      ['album_id'],
+      ['page_number'],
+    );
+
+    return response()->noContent();
+  }
+
+  public function clearReadingProgress()
+  {
+    DB::table('reading_progress')->delete();
+
+    return response()->noContent();
+  }
+
   /**
    * Helper to clear and requeue an album for downloading.
    */

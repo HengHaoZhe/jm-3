@@ -349,24 +349,29 @@ export default function Home() {
     );
   }
 
-  function clearReadingProgress() {
-    const prefix = "jm-next-reading-progress:";
+  async function clearReadingProgress() {
+    try {
+      setActionError(null);
 
-    const keysToRemove: string[] = [];
+      const response = await apiFetch("/reading-progress", {
+        method: "DELETE",
+      });
 
-    for (let index = 0; index < localStorage.length; index++) {
-      const key = localStorage.key(index);
-
-      if (key?.startsWith(prefix)) {
-        keysToRemove.push(key);
+      if (!response.ok) {
+        throw new Error(
+          await getApiErrorMessage(
+            response,
+            `Failed to clear reading progress (${response.status}).`,
+          ),
+        );
       }
+
+      window.alert("All reading progress has been cleared.");
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Failed to clear reading progress.",
+      );
     }
-
-    keysToRemove.forEach((key) => {
-      localStorage.removeItem(key);
-    });
-
-    window.alert("All reading progress has been cleared.");
   }
 
   async function handleRedownloadFailed() {
